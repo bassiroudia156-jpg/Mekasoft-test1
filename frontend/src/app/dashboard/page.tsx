@@ -434,7 +434,6 @@ export default function DashboardPage() {
             <StatCard
               label="Recettes du mois"
               value={organizationId && hasData ? (stats?.revenueThisMonth ?? 0) : '—'}
-              format={formatCompactAmount}
               sub="FCFA encaissés"
               status="default"
               icon="trending-up"

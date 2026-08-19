@@ -29,7 +29,6 @@ import FilterButton from '@/components/ui/FilterButton';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
-import { formatCompactAmount } from '@/lib/format-compact-fcfa';
 
 interface PaymentListItem {
   id: string;
@@ -60,9 +59,6 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 
 function formatAmount(n: number): string {
   return `${n.toLocaleString('fr-FR')} FCFA`;
-}
-function formatCompact(n: number): string {
-  return `${formatCompactAmount(n)} FCFA`;
 }
 
 function PaymentsListBody() {
@@ -200,7 +196,7 @@ function PaymentsListBody() {
               </div>
               <div className="text-2xl font-bold font-headings text-accent mb-1">
                 {stats ? (
-                  <AnimatedNumber value={stats.toCollect.amount} format={formatCompact} />
+                  <AnimatedNumber value={stats.toCollect.amount} format={formatAmount} />
                 ) : (
                   '—'
                 )}
@@ -215,7 +211,7 @@ function PaymentsListBody() {
               </div>
               <div className="text-2xl font-bold font-headings text-success mb-1">
                 {stats ? (
-                  <AnimatedNumber value={stats.paidThisMonth.amount} format={formatCompact} />
+                  <AnimatedNumber value={stats.paidThisMonth.amount} format={formatAmount} />
                 ) : (
                   '—'
                 )}
