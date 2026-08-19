@@ -61,9 +61,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Base fields present on every response — the /subscriptions/return
+    // confirmation UI (2026-08-19) needs plan/provider/amount even before
+    // (or without) a fresh credit, e.g. re-polling an already-SUCCEEDED row.
+    const base = {
+      plan: payment.plan,
+      provider: payment.provider,
+      amount: payment.amount,
+      currency: payment.currency,
+    };
+
     if (payment.status !== 'PENDING') {
       return NextResponse.json(
-        { status: payment.status },
+        { status: payment.status, ...base },
         { headers: { 'x-request-id': ctx.requestId } },
       );
     }
@@ -152,12 +162,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     if (credited) {
+      // Best-effort — the confirmation page shows a renewal date when
+      // available, but a missing Subscription row (shouldn't happen) must
+      // not turn a real success into an error response.
+      const sub = await prisma.subscription.findUnique({
+        where: { organizationId: payment.organizationId },
+        select: { currentPeriodEnd: true },
+      });
       return NextResponse.json(
-        { status: 'SUCCEEDED' },
+        { status: 'SUCCEEDED', ...base, currentPeriodEnd: sub?.currentPeriodEnd ?? null },
         { headers: { 'x-request-id': ctx.requestId } },
       );
     }
 
-    return NextResponse.json({ status: 'PENDING' }, { headers: { 'x-request-id': ctx.requestId } });
+    return NextResponse.json(
+      { status: 'PENDING', ...base },
+      { headers: { 'x-request-id': ctx.requestId } },
+    );
   });
 }

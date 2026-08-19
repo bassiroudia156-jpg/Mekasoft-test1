@@ -9,9 +9,9 @@
 //
 // Extra fields beyond { sub, email } (id, emailVerifiedAt, createdAt,
 // updatedAt, hasPassword, linkedProviders) are fetched via a second DB hit
-// so the AuthContext / settings page can branch on them without an extra
+// so the AuthContext / profile page can branch on them without an extra
 // round-trip. `hasPassword` distinguishes OAuth-only accounts (passwordHash
-// is null) — used by /settings to switch between "Set password" and
+// is null) — used by /profile to switch between "Set password" and
 // "Change password". `linkedProviders` is a string[] of provider names
 // already wired (e.g. ['google']).
 //

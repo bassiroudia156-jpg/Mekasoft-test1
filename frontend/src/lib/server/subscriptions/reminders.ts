@@ -91,7 +91,7 @@ export async function sendSubscriptionReminders(
     }
 
     const plan = sub.plan === 'BUSINESS' ? 'BUSINESS' : 'PRO';
-    const renewUrl = `${appUrl}/settings`;
+    const renewUrl = `${appUrl}/profile`;
     const templateArgs = {
       organizationName: sub.organization.name,
       plan: plan as 'PRO' | 'BUSINESS',

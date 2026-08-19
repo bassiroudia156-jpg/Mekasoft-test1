@@ -34,7 +34,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
     try {
-      const session = await createStripePortalSession(sub.stripeCustomerId, `${appUrl}/settings`);
+      const session = await createStripePortalSession(sub.stripeCustomerId, `${appUrl}/profile`);
       return NextResponse.json(
         { url: session.url },
         { headers: { 'x-request-id': ctx.requestId } },

@@ -1,10 +1,14 @@
 // Ported from Banani EditShopSettingsPage.
 //
 // Guarded for ADMIN+ org role (Decision 9) — MEMBER callers are redirected
-// back to /settings rather than shown a form that would 403 on submit.
+// back to /profile rather than shown a form that would 403 on submit.
 // "Horaires d'ouverture" are free-text Fields (not structured time-pickers)
 // since Banani's own mock shows flexible values like "Fermé", not fixed
 // HH:MM pairs.
+//
+// 2026-08-19: the Atelier summary card that links here moved from /settings
+// (retired) to /profile — this edit form's own URL didn't need to move, only
+// its redirect targets and the Sidebar highlight below.
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -79,7 +83,7 @@ export default function EditShopSettingsPage() {
   useEffect(() => {
     if (!user) return;
     if (!user.organizationId || !canEdit) {
-      router.replace('/settings');
+      router.replace('/profile');
       return;
     }
     let cancelled = false;
@@ -157,7 +161,7 @@ export default function EditShopSettingsPage() {
         },
       });
       toast('Informations de l’atelier mises à jour.', 'success');
-      router.push('/settings');
+      router.push('/profile');
     } catch (err) {
       setError(
         err instanceof ApiError && err.code === 'ORG_ROLE_INSUFFICIENT'
@@ -173,10 +177,10 @@ export default function EditShopSettingsPage() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar active="settings" />
+      <Sidebar active="profile" />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <PageHeader eyebrow="Paramètres" title="Modifier l'atelier" />
+        <PageHeader eyebrow="Atelier" title="Modifier l'atelier" />
 
         <div className="flex-1 p-6">
           {loading ? (
@@ -225,7 +229,7 @@ export default function EditShopSettingsPage() {
                     <p className="text-xs text-muted-foreground">
                       {canBrand
                         ? 'Affiché sur vos factures PDF. PNG/JPG, fond transparent recommandé.'
-                        : 'Réservé aux plans Pro et Business — voir Paramètres > Abonnement.'}
+                        : 'Réservé aux plans Pro et Business — voir Mon profil > Abonnement.'}
                     </p>
                   </div>
                 </div>
@@ -310,7 +314,7 @@ export default function EditShopSettingsPage() {
                 <Button type="submit" variant="primary" disabled={submitting}>
                   {submitting ? 'Enregistrement…' : 'Enregistrer les modifications'}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => router.push('/settings')}>
+                <Button type="button" variant="outline" onClick={() => router.push('/profile')}>
                   Annuler
                 </Button>
               </div>

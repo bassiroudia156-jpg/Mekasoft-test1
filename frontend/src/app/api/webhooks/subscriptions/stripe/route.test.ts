@@ -12,6 +12,8 @@ const subscriptionFindUnique = vi.fn();
 const subscriptionUpdateMany = vi.fn();
 const orgUpdate = vi.fn();
 const orgFindUnique = vi.fn();
+const anonymousIntentFindUnique = vi.fn();
+const anonymousIntentUpdate = vi.fn();
 
 const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
   fn({
@@ -27,6 +29,10 @@ const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
       updateMany: subscriptionUpdateMany,
     },
     organization: { update: orgUpdate, findUnique: orgFindUnique },
+    anonymousSubscriptionIntent: {
+      findUnique: anonymousIntentFindUnique,
+      update: anonymousIntentUpdate,
+    },
   }),
 );
 
@@ -58,8 +64,14 @@ vi.mock('@/lib/server/subscriptions/stripe', () => ({
   getStripeClient: vi.fn(),
 }));
 
+vi.mock('@/lib/server/subscriptions/anonymous', () => ({
+  resolveOrganizationForAnonymousIntent: vi.fn(),
+}));
+
 import { getStripeClient } from '@/lib/server/subscriptions/stripe';
+import { resolveOrganizationForAnonymousIntent } from '@/lib/server/subscriptions/anonymous';
 const mockGetStripeClient = vi.mocked(getStripeClient);
+const mockResolveAnonymous = vi.mocked(resolveOrganizationForAnonymousIntent);
 
 function makeRequest(event: unknown): NextRequest {
   nextEvent = event;
@@ -73,6 +85,9 @@ function makeRequest(event: unknown): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   findUnique.mockResolvedValue(null);
+  // No matching AnonymousSubscriptionIntent by default — every existing
+  // test below exercises the authenticated (real-org) flow.
+  anonymousIntentFindUnique.mockResolvedValue(null);
 });
 
 describe('POST /api/webhooks/subscriptions/stripe', () => {
@@ -110,6 +125,69 @@ describe('POST /api/webhooks/subscriptions/stripe', () => {
     expect(orgUpdate).toHaveBeenCalledWith({
       where: { id: 'org_1' },
       data: { plan: 'PRO', planUpdatedAt: expect.any(Date) },
+    });
+  });
+
+  it('invoice.paid: anonymous checkout — resolves the org via resolveOrganizationForAnonymousIntent, activates against the real org, and marks the intent SUCCEEDED', async () => {
+    mockGetStripeClient.mockReturnValue({
+      subscriptions: {
+        retrieve: vi.fn().mockResolvedValue({
+          id: 'sub_1',
+          customer: 'cus_1',
+          // `organizationId` is really the AnonymousSubscriptionIntent id here.
+          metadata: { organizationId: 'intent_1', plan: 'PRO' },
+          items: { data: [{ current_period_end: 1_789_000_000 }] },
+        }),
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    anonymousIntentFindUnique.mockResolvedValueOnce({
+      id: 'intent_1',
+      email: 'nouveau@garage.test',
+      atelierName: 'Garage Ndiaye',
+      phone: '+221771234567',
+      status: 'PENDING',
+    });
+    mockResolveAnonymous.mockResolvedValueOnce({
+      kind: 'new_org_new_user',
+      organizationId: 'org_new',
+      resetCode: 'ABCD1234',
+    });
+    orgFindUnique.mockResolvedValue({
+      name: 'Garage Ndiaye',
+      contactEmail: null,
+      owner: { email: 'nouveau@garage.test' },
+    });
+
+    const { POST } = await import('./route');
+    const res = await POST(
+      makeRequest({
+        id: 'evt_anon_1',
+        type: 'invoice.paid',
+        data: {
+          object: { id: 'in_anon_1', subscription: 'sub_1', amount_paid: 9_900, currency: 'xof' },
+        },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockResolveAnonymous).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'intent_1' }),
+    );
+    expect(subscriptionUpsert).toHaveBeenCalled();
+    expect(orgUpdate).toHaveBeenCalledWith({
+      where: { id: 'org_new' },
+      data: { plan: 'PRO', planUpdatedAt: expect.any(Date) },
+    });
+    expect(anonymousIntentUpdate).toHaveBeenCalledWith({
+      where: { id: 'intent_1' },
+      data: {
+        status: 'SUCCEEDED',
+        succeededAt: expect.any(Date),
+        organizationId: 'org_new',
+        resultKind: 'new_org_new_user',
+      },
     });
   });
 

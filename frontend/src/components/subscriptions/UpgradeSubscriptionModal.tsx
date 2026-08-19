@@ -43,7 +43,7 @@ const PROVIDERS: Record<string, { label: string; blurb: string; icon: string }> 
 
 const ERROR_MAP: Record<string, string> = {
   PHONE_REQUIRED:
-    'Ajoutez un numéro de téléphone dans Paramètres > Atelier avant de payer par mobile money.',
+    'Ajoutez un numéro de téléphone dans Mon profil > Atelier avant de payer par mobile money.',
   SUBSCRIPTION_PROVIDER_UNCONFIGURED: "Ce moyen de paiement n'est pas encore disponible.",
   CHECKOUT_FAILED: 'Le paiement a échoué au démarrage. Réessayez.',
 };

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 import Button from '@/components/ui/Button';
@@ -6,11 +7,6 @@ import { useMobileSidebar } from '@/contexts/MobileSidebarContext';
 export interface TopBarProps {
   /** Greeting/context line — Banani mocked "Tableau de bord" as a static label; kept as a prop so each page can set its own. */
   title?: string;
-  searchPlaceholder?: string;
-  /** Controlled search input — Banani's mock rendered this as decorative text with no real
-   * `<input>` behind it; the caller now owns the value and drives its own filtering. */
-  searchValue?: string;
-  onSearchChange?: (value: string) => void;
   onNewIntervention?: () => void;
   /** Small "Upgrader" pill linking to /subscriptions/plans — caller decides
    * visibility (dashboard only shows it once the org's plan is known and
@@ -18,6 +14,13 @@ export interface TopBarProps {
    * filled CTA competing with "Nouvelle intervention" — see 2026-08-19
    * dashboard upgrade request. */
   showUpgrade?: boolean;
+  /** Rendered in the slot that used to hold the free-text search box (right
+   * of "Nouvelle intervention", wraps to its own full-width row on mobile).
+   * 2026-08-19: the dashboard's search input was retired in favor of this —
+   * see ExportMenu, its current occupant — since TopBar has no other
+   * consumer today, the slot stayed generic rather than hardcoding Export
+   * here. */
+  rightSlot?: ReactNode;
 }
 
 function todayFr(): string {
@@ -29,18 +32,17 @@ function todayFr(): string {
   });
 }
 
-// Responsive audit fix (2026-08-17): the search box was a fixed w-64
-// (256px) with no mobile treatment, and there was no way to reach `Sidebar`
-// at all below `lg:` before this pass added the hamburger. Below `lg:` the
-// search now wraps to its own full-width row (`order-last` + `w-full`) and
-// the CTA label shortens, rather than everything overflowing the viewport.
+// Responsive audit fix (2026-08-17): the search box (now `rightSlot`, see
+// its prop comment) was a fixed w-64 (256px) with no mobile treatment, and
+// there was no way to reach `Sidebar` at all below `lg:` before this pass
+// added the hamburger. Below `lg:` that slot still wraps to its own
+// full-width row (`order-last` + `w-full`) and the CTA label shortens,
+// rather than everything overflowing the viewport.
 export default function TopBar({
   title = 'Tableau de bord',
-  searchPlaceholder = 'Chercher client, véhicule…',
-  searchValue = '',
-  onSearchChange,
   onNewIntervention,
   showUpgrade = false,
+  rightSlot,
 }: TopBarProps) {
   const { toggle } = useMobileSidebar();
 
@@ -84,21 +86,7 @@ export default function TopBar({
         <span className="sm:hidden">Nouvelle</span>
       </Button>
 
-      {/* Search */}
-      <div className="relative w-full lg:w-64 order-last lg:order-none">
-        <Icon
-          i="search"
-          size={14}
-          className="text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2"
-        />
-        <input
-          type="text"
-          value={searchValue}
-          onChange={(e) => onSearchChange?.(e.target.value)}
-          placeholder={searchPlaceholder}
-          className="w-full pl-9 pr-3 py-2 border border-border bg-input rounded-sm text-sm text-foreground placeholder-muted-foreground outline-none focus:ring-2 focus:ring-primary/30"
-        />
-      </div>
+      {rightSlot && <div className="w-full lg:w-auto order-last lg:order-none">{rightSlot}</div>}
     </div>
   );
 }

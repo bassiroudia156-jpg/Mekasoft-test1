@@ -83,7 +83,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         {
           error: 'PHONE_REQUIRED',
           message:
-            'Un numéro de téléphone est requis pour payer par mobile money. Ajoutez-le dans Paramètres > Atelier.',
+            'Un numéro de téléphone est requis pour payer par mobile money. Ajoutez-le dans Mon profil > Atelier.',
         },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         ...(org.phone ? { customerPhone: org.phone } : {}),
         subscriptionPaymentId: payment.id,
         successUrl: `${appUrl}/subscriptions/return?payment=${payment.id}`,
-        cancelUrl: `${appUrl}/settings`,
+        cancelUrl: `${appUrl}/profile`,
       });
 
       await prisma.subscriptionPayment.update({

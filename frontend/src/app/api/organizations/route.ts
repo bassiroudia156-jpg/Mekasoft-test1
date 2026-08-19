@@ -12,9 +12,9 @@
 // GET lists the caller's organizations — used by /onboarding and
 // /dashboard to decide whether to show the wizard or the org-less banner.
 // Phase 8: GET also returns the shop-detail fields (street/postalCode/
-// country/taxId/siren/contactEmail/hours*) so /settings and /settings/shop
-// don't need a dedicated endpoint — additive, existing consumers only
-// destructure id/slug/name/role.
+// country/taxId/siren/contactEmail/hours*) so /profile (Atelier card,
+// formerly /settings) and /settings/shop don't need a dedicated endpoint —
+// additive, existing consumers only destructure id/slug/name/role.
 //
 // PATCH updates the CALLER's own org (no [id] in the URL — same implicit-
 // scoping convention as requireCallerOrg everywhere else). Gated at

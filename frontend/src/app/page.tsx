@@ -552,11 +552,10 @@ export default function LandingPage() {
                   ))}
                 </div>
                 <Link
-                  href="/signup"
+                  href="/subscriptions/checkout?plan=PRO"
                   className="w-full py-2 lg:py-3 bg-primary text-primary-foreground rounded lg:rounded-md text-xs lg:text-sm font-medium text-center hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
                 >
-                  <span className="lg:hidden">Commencer</span>
-                  <span className="hidden lg:inline">Commencer gratuitement</span>
+                  S&apos;abonner
                 </Link>
               </div>
 
@@ -602,11 +601,10 @@ export default function LandingPage() {
                   ))}
                 </div>
                 <Link
-                  href="/signup"
+                  href="/subscriptions/checkout?plan=BUSINESS"
                   className="w-full py-2 lg:py-3 border border-primary text-primary rounded lg:rounded-md text-xs lg:text-sm font-medium text-center hover:bg-primary/5 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
                 >
-                  <span className="lg:hidden">Commencer</span>
-                  <span className="hidden lg:inline">Commencer gratuitement</span>
+                  S&apos;abonner
                 </Link>
               </div>
             </div>

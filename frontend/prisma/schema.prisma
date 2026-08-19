@@ -767,3 +767,46 @@ model SubscriptionPayment {
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
 }
+
+// ───────────────────────────────────────────────────────────────────────
+// Anonymous SaaS-subscription checkout (2026-08-19) — the landing page's
+// "S'abonner" buttons for logged-out visitors. Deliberately a SEPARATE model
+// from SubscriptionPayment rather than making SubscriptionPayment.organizationId
+// nullable: that field is relied on non-optionally everywhere (fulfillment.ts,
+// admin routes, the receipt PDF route, …), and loosening it would ripple
+// through code that's already live against real Stripe charges. Instead, a
+// standalone row holds just enough (email/atelierName/phone) to create the
+// Organization + User AFTER payment succeeds, inside the webhook — see
+// lib/server/subscriptions/anonymous.ts. `organizationId` here is set only
+// once fulfillment has run (idempotency marker + audit trail of which org
+// resulted); it is NOT a foreign key, since it may be an existing org (email
+// already had an account) rather than a newly created one.
+model AnonymousSubscriptionIntent {
+  id          String @id @default(cuid())
+  email       String
+  atelierName String
+  phone       String
+
+  plan        String // PRO | BUSINESS
+  provider    String // STRIPE | MONEROO | CHARIOW
+  providerRef String // provider's checkout/session reference
+
+  amount   Int
+  currency String @default("XOF")
+  status   String @default("PENDING") // PENDING | SUCCEEDED | FAILED
+
+  checkoutUrl    String?
+  organizationId String? // set once fulfillment resolves/creates the org
+  // existing_org | new_org_existing_user | new_org_new_user — which branch
+  // resolveOrganizationForAnonymousIntent() took, so the confirmation page
+  // knows whether to say "check your email to set a password" (new_org_new_user)
+  // or "log in now" (the other two, which already have a usable password).
+  resultKind     String?
+
+  createdAt   DateTime  @default(now())
+  succeededAt DateTime?
+
+  @@unique([provider, providerRef])
+  @@index([email])
+  @@index([status])
+}

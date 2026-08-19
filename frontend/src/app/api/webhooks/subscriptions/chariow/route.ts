@@ -23,9 +23,13 @@ import {
   timingSafeEqualStrings,
 } from '@/lib/server/subscriptions/chariow';
 import { activateSubscription } from '@/lib/server/subscriptions/fulfillment';
+import { resolveOrganizationForAnonymousIntent } from '@/lib/server/subscriptions/anonymous';
 import { isPayablePlan } from '@/lib/server/subscriptions/types';
 import { getEmailQueue } from '@/lib/server/queues/email-queue-singleton';
-import { subscriptionConfirmedEmail } from '@/lib/server/subscriptions/confirmation-templates';
+import {
+  subscriptionConfirmedEmail,
+  subscriptionWelcomeEmail,
+} from '@/lib/server/subscriptions/confirmation-templates';
 import { prisma } from '@/lib/server/prisma';
 import { createLogger } from '@/lib/server/logger';
 
@@ -54,6 +58,85 @@ const chariowHandler = createWebhookHandler({
         reQueriedStatus: sale?.status,
       });
       return {};
+    }
+
+    // Anonymous landing-page checkout (2026-08-19) — see moneroo/route.ts's
+    // onPaid for the fuller explanation; same shape here.
+    const anonymousIntent = await tx.anonymousSubscriptionIntent.findUnique({
+      where: { provider_providerRef: { provider: 'CHARIOW', providerRef } },
+    });
+    if (anonymousIntent) {
+      if (anonymousIntent.status === 'SUCCEEDED') return {}; // idempotent replay
+      if (!isPayablePlan(anonymousIntent.plan)) return {};
+
+      if (!amountMatches(sale.amount, anonymousIntent.amount)) {
+        log.warn('chariow subscription webhook: anonymous amount mismatch — NOT crediting', {
+          providerRef,
+          expected: anonymousIntent.amount,
+          reported: sale.amount,
+        });
+        return {};
+      }
+
+      const resolution = await resolveOrganizationForAnonymousIntent(tx, anonymousIntent);
+      await activateSubscription(tx, {
+        organizationId: resolution.organizationId,
+        plan: anonymousIntent.plan as 'PRO' | 'BUSINESS',
+        provider: 'CHARIOW',
+        providerRef,
+        amount: anonymousIntent.amount,
+        currency: anonymousIntent.currency,
+      });
+      await tx.anonymousSubscriptionIntent.update({
+        where: { id: anonymousIntent.id },
+        data: {
+          status: 'SUCCEEDED',
+          succeededAt: new Date(),
+          organizationId: resolution.organizationId,
+          resultKind: resolution.kind,
+        },
+      });
+
+      const org = await tx.organization.findUnique({
+        where: { id: resolution.organizationId },
+        select: { name: true, contactEmail: true, owner: { select: { email: true } } },
+      });
+      const sub = await tx.subscription.findUnique({
+        where: { organizationId: resolution.organizationId },
+        select: { currentPeriodEnd: true },
+      });
+
+      return {
+        postCommit: async () => {
+          const emailQueue = getEmailQueue();
+          if (!emailQueue || !org || !sub) return;
+
+          if (resolution.kind === 'new_org_new_user') {
+            const resetUrl = `${appUrl}/reset-password?email=${encodeURIComponent(anonymousIntent.email)}&code=${resolution.resetCode}`;
+            const tpl = subscriptionWelcomeEmail({
+              organizationName: org.name,
+              plan: anonymousIntent.plan as 'PRO' | 'BUSINESS',
+              resetUrl,
+            });
+            await emailQueue.enqueue({
+              to: anonymousIntent.email,
+              subject: tpl.subject,
+              html: tpl.html,
+              text: tpl.text,
+            });
+            return;
+          }
+
+          const to = org.contactEmail ?? org.owner.email;
+          const tpl = subscriptionConfirmedEmail({
+            organizationName: org.name,
+            plan: anonymousIntent.plan as 'PRO' | 'BUSINESS',
+            currentPeriodEnd: sub.currentPeriodEnd.toLocaleDateString('fr-FR'),
+            manageUrl: `${appUrl}/profile`,
+          });
+          await emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
+        },
+      };
     }
 
     const payment = await tx.subscriptionPayment.findUnique({
@@ -103,7 +186,7 @@ const chariowHandler = createWebhookHandler({
           organizationName: org.name,
           plan: payment.plan as 'PRO' | 'BUSINESS',
           currentPeriodEnd: sub.currentPeriodEnd.toLocaleDateString('fr-FR'),
-          manageUrl: `${appUrl}/settings`,
+          manageUrl: `${appUrl}/profile`,
         });
         await emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
       },

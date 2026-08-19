@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
+import Link from 'next/link';
+import { api, ApiError } from '@/lib/api';
 import { useAuth, useUser } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { orgRoleLabel } from '@/lib/roleLabel';
 import Sidebar from '@/components/layout/Sidebar';
@@ -16,6 +18,7 @@ import LogoutConfirmModal from '@/components/auth/LogoutConfirmModal';
 import TeamManagementModal from '@/components/team/TeamManagementModal';
 import ChangePasswordModal from '@/components/account/ChangePasswordModal';
 import EditProfileModal from '@/components/account/EditProfileModal';
+import UpgradeSubscriptionModal from '@/components/subscriptions/UpgradeSubscriptionModal';
 
 interface TeamMemberSummary {
   name: string;
@@ -23,19 +26,79 @@ interface TeamMemberSummary {
   role: string;
 }
 
+interface SubscriptionInfo {
+  plan: string;
+  provider: 'STRIPE' | 'MONEROO' | 'CHARIOW';
+  status: 'ACTIVE' | 'GRACE' | 'EXPIRED' | 'CANCELED';
+  currentPeriodEnd: string;
+  graceEndsAt: string | null;
+  cancelAtPeriodEnd: boolean;
+}
+
+const SUBSCRIPTION_PROVIDER_LABEL: Record<string, string> = {
+  STRIPE: 'Carte bancaire (Stripe)',
+  MONEROO: 'Mobile Money (Moneroo)',
+  CHARIOW: 'Mobile Money (Chariow)',
+};
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+// Mirrors lib/server/plans/limits.ts's PLAN_PRICING/PLAN_LIMITS — same
+// local-copy convention as the landing page (that module lives under
+// lib/server/, this is client-rendered display copy).
+const PLAN_INFO: Record<string, { label: string; blurb: string; badge: string }> = {
+  FREE: {
+    label: 'Gratuit',
+    blurb: 'Jusqu’à 3 clients, 3 véhicules, 5 interventions/mois, 1 utilisateur.',
+    badge: 'bg-muted text-muted-foreground',
+  },
+  PRO: {
+    label: 'Pro',
+    blurb: 'Illimité + partage WhatsApp + logo sur les factures.',
+    badge: 'bg-primary/10 text-primary',
+  },
+  BUSINESS: {
+    label: 'Business',
+    blurb: "Tout Pro + jusqu'à 5 utilisateurs, rôles, rapports, export.",
+    badge: 'bg-accent/10 text-accent',
+  },
+};
+
 // Full-page "Mon profil" (2026-08-19, per user feedback) — replaces the
 // ManagerProfilePanel right-side slide-over that used to open from the
 // Sidebar's bottom account block on every authenticated page. Content is
 // ported 1:1 from that panel, plus the "Compte Google" row that used to
 // live in Settings' own Sécurité section: Settings' Compte/Sécurité
 // sections were retired the same day (see settings/page.tsx) since they
-// duplicated this page — all personal-account info now lives only here,
-// Settings keeps only atelier/business-level content.
+// duplicated this page — all personal-account info now lives only here.
+//
+// 2026-08-19 (later same day): Atelier and Abonnement also moved here from
+// /settings, which is now a redirect stub — the Sidebar's "Paramètres"
+// button was renamed to "Export" and scoped down to just the reports/CSV
+// sections (see /export), leaving no nav destination for Atelier/Abonnement.
+// Rather than orphan them, they joined the one remaining full account page:
+// this one already owned "Ma team" (also org-level), and the two sections
+// were literally titled "Atelier & abonnement" as a pair on the old page, so
+// keeping them together here preserves that grouping.
 export default function ProfilePage() {
   const user = useUser();
   const { logout } = useAuth();
   const router = useRouter();
-  const { organizationId } = useCallerOrganization(!!user);
+  const { toast } = useToast();
+  const {
+    organizationId,
+    plan: orgPlan,
+    name: orgName,
+    street: orgStreet,
+    city: orgCity,
+    taxId: orgTaxId,
+  } = useCallerOrganization(!!user);
 
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -46,6 +109,11 @@ export default function ProfilePage() {
   const [teamCount, setTeamCount] = useState(0);
   const [teamModalOpen, setTeamModalOpen] = useState(false);
   const [teamModalView, setTeamModalView] = useState<'list' | 'add'>('list');
+
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [availableProviders, setAvailableProviders] = useState<string[]>([]);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -72,7 +140,44 @@ export default function ProfilePage() {
     };
   }, [organizationId]);
 
+  // Ported unchanged from the old /settings page — no `if (!user)` guard,
+  // deps on `[user]` so it re-fires once AuthContext resolves.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api<{
+          subscription: SubscriptionInfo | null;
+          availableProviders: string[];
+        }>('/api/subscriptions');
+        if (cancelled) return;
+        setSubscription(res.subscription);
+        setAvailableProviders(res.availableProviders);
+      } catch {
+        // Abonnement section falls back to the plan badge only.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   if (!user) return null;
+
+  async function openBillingPortal() {
+    setPortalLoading(true);
+    try {
+      const res = await api<{ url: string }>('/api/subscriptions/portal', { method: 'POST' });
+      window.location.href = res.url;
+    } catch (err) {
+      const message =
+        err instanceof ApiError && err.code === 'NO_STRIPE_SUBSCRIPTION'
+          ? "Aucun abonnement Stripe actif n'a été trouvé."
+          : "Impossible d'ouvrir le portail de facturation. Réessayez.";
+      toast(message, 'error');
+      setPortalLoading(false);
+    }
+  }
 
   const [firstName, lastName] = (() => {
     const n = (user.name ?? '').trim();
@@ -83,6 +188,12 @@ export default function ProfilePage() {
   const fullName = user.name ?? user.email;
   const role = orgRoleLabel(user.orgRole, user.jobTitle);
   const googleLinked = user.linkedProviders.includes('google');
+  const canEditShop = user.orgRole === 'OWNER' || user.orgRole === 'ADMIN';
+  // EXPIRED/CANCELED rows still exist in the DB (downgrade.ts never deletes
+  // them) but don't entitle the org to anything anymore — treat those the
+  // same as "no subscription" for which UI to show.
+  const hasActiveOrGraceSubscription =
+    !!subscription && (subscription.status === 'ACTIVE' || subscription.status === 'GRACE');
 
   async function confirmLogout() {
     setLoggingOut(true);
@@ -259,6 +370,184 @@ export default function ProfilePage() {
               </div>
             </FormSection>
           )}
+
+          {/* Atelier — moved here from /settings (2026-08-19, see header
+              comment). Read-only summary card; editing happens on the
+              dedicated /settings/shop form, same as before the move. */}
+          {organizationId && (
+            <FormSection title="Atelier">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-muted-foreground uppercase tracking-widest">
+                    Nom de l&apos;atelier
+                  </label>
+                  <div className="border border-border rounded-md px-3 py-2 bg-input text-sm text-foreground">
+                    {orgName || '—'}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-muted-foreground uppercase tracking-widest">
+                    Adresse
+                  </label>
+                  <div className="border border-border rounded-md px-3 py-2 bg-input text-sm text-foreground">
+                    {[orgStreet, orgCity].filter(Boolean).join(', ') || '—'}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-muted-foreground uppercase tracking-widest">
+                    Numéro SIRET
+                  </label>
+                  <div className="border border-border rounded-md px-3 py-2 bg-input text-sm text-foreground">
+                    {orgTaxId || '—'}
+                  </div>
+                </div>
+                {canEditShop && (
+                  <Link href="/settings/shop">
+                    <Button type="button" variant="outline" className="self-start">
+                      <Icon i="pencil" size={14} />
+                      Modifier l&apos;atelier
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </FormSection>
+          )}
+
+          {/* Abonnement — moved here from /settings (2026-08-19, see header
+              comment); deliberately last, same as on the old page, so the
+              upgrade CTA doesn't sit in front of the account's core
+              settings while org data is still loading. */}
+          {organizationId && (
+            <>
+              {hasActiveOrGraceSubscription ? (
+                <FormSection title="Abonnement">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          (PLAN_INFO[orgPlan] ?? PLAN_INFO.FREE)!.badge
+                        }`}
+                      >
+                        Plan {(PLAN_INFO[orgPlan] ?? PLAN_INFO.FREE)!.label}
+                      </span>
+                      {subscription!.status === 'GRACE' && (
+                        <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-semibold text-warning">
+                          Paiement en retard
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {(PLAN_INFO[orgPlan] ?? PLAN_INFO.FREE)!.blurb}
+                    </p>
+
+                    <div className="flex flex-col gap-1 rounded-md border border-border bg-input px-3 py-2.5 text-xs">
+                      <p className="text-foreground">
+                        Payé via{' '}
+                        {SUBSCRIPTION_PROVIDER_LABEL[subscription!.provider] ??
+                          subscription!.provider}
+                      </p>
+                      {subscription!.status === 'GRACE' && subscription!.graceEndsAt ? (
+                        <p className="text-warning">
+                          Le renouvellement n&apos;a pas été détecté — repasse en Gratuit le{' '}
+                          {formatDate(subscription!.graceEndsAt)} sauf renouvellement.
+                        </p>
+                      ) : subscription!.cancelAtPeriodEnd ? (
+                        <p className="text-muted-foreground">
+                          Annulé — actif jusqu&apos;au {formatDate(subscription!.currentPeriodEnd)},
+                          puis repasse en Gratuit.
+                        </p>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          Prochain renouvellement le {formatDate(subscription!.currentPeriodEnd)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {orgPlan !== 'BUSINESS' && (
+                        <Button type="button" variant="accent" onClick={() => setUpgradeOpen(true)}>
+                          <Icon i="zap" size={14} />
+                          Passer à Business
+                        </Button>
+                      )}
+                      {(subscription!.provider === 'MONEROO' ||
+                        subscription!.provider === 'CHARIOW') &&
+                        subscription!.status === 'GRACE' && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setUpgradeOpen(true)}
+                          >
+                            <Icon i="refresh-cw" size={14} />
+                            Renouveler maintenant
+                          </Button>
+                        )}
+                      {subscription!.provider === 'STRIPE' && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={openBillingPortal}
+                          disabled={portalLoading}
+                        >
+                          <Icon i="credit-card" size={14} />
+                          {portalLoading ? 'Ouverture…' : 'Gérer mon abonnement'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </FormSection>
+              ) : orgPlan === 'FREE' ? (
+                <div className="bg-gradient-to-r from-primary to-primary/80 border border-primary rounded-lg p-6 lg:p-8 flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold font-headings text-primary-foreground">
+                      Passez à un forfait supérieur
+                    </h3>
+                    <p className="text-sm text-primary-foreground/80 mt-2">
+                      Accédez à toutes les fonctionnalités premium et développez votre atelier avec
+                      MekaSoft Pro ou Business.
+                    </p>
+                  </div>
+                  <Link
+                    href="/subscriptions/plans"
+                    className="w-full px-4 py-3 bg-primary-foreground text-primary rounded-md text-sm font-medium flex items-center gap-2 justify-center hover:bg-primary-foreground/90 transition-colors"
+                  >
+                    <Icon i="arrow-up-right" size={16} />
+                    Voir les forfaits
+                  </Link>
+                </div>
+              ) : (
+                // Plan attribué manuellement (pnpm db:set-org-plan / route
+                // admin) sans ligne Subscription réelle — pas de date/
+                // fournisseur à afficher, et la bannière "upgrade" serait
+                // trompeuse puisque le garage est déjà sur ce forfait.
+                <FormSection title="Abonnement">
+                  <div className="flex flex-col gap-4">
+                    <span
+                      className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${
+                        (PLAN_INFO[orgPlan] ?? PLAN_INFO.FREE)!.badge
+                      }`}
+                    >
+                      Plan {(PLAN_INFO[orgPlan] ?? PLAN_INFO.FREE)!.label}
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      Forfait attribué manuellement — aucun abonnement en ligne actif.
+                    </p>
+                    {orgPlan !== 'BUSINESS' && (
+                      <Button
+                        type="button"
+                        variant="accent"
+                        className="self-start"
+                        onClick={() => setUpgradeOpen(true)}
+                      >
+                        <Icon i="zap" size={14} />
+                        Passer à Business
+                      </Button>
+                    )}
+                  </div>
+                </FormSection>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -301,6 +590,12 @@ export default function ProfilePage() {
           initialView={teamModalView}
         />
       )}
+      <UpgradeSubscriptionModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        availableProviders={availableProviders}
+        defaultPlan={orgPlan === 'FREE' ? 'PRO' : 'BUSINESS'}
+      />
     </div>
   );
 }

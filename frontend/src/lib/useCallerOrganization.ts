@@ -8,6 +8,9 @@ interface OrgSummary {
   slug: string;
   name: string;
   plan?: string;
+  street?: string | null;
+  city?: string | null;
+  taxId?: string | null;
 }
 
 export interface CallerOrganization {
@@ -16,6 +19,13 @@ export interface CallerOrganization {
    * fails closed (hidden) rather than briefly flashing a locked feature. */
   plan: string;
   loading: boolean;
+  // Added 2026-08-19 for /profile's Atelier card (moved there from the
+  // retired /settings page) — same single fetch as organizationId/plan
+  // above, additive fields, existing consumers unaffected.
+  name: string | null;
+  street: string | null;
+  city: string | null;
+  taxId: string | null;
 }
 
 // V1 is single-org-per-user (see Phase 2) — every page that needs "the
@@ -27,6 +37,10 @@ export interface CallerOrganization {
 export function useCallerOrganization(enabled: boolean): CallerOrganization {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [plan, setPlan] = useState('FREE');
+  const [name, setName] = useState<string | null>(null);
+  const [street, setStreet] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(null);
+  const [taxId, setTaxId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,9 +49,14 @@ export function useCallerOrganization(enabled: boolean): CallerOrganization {
     (async () => {
       try {
         const res = await api<{ organizations: OrgSummary[] }>('/api/organizations');
+        const org = res.organizations[0];
         if (!cancelled) {
-          setOrganizationId(res.organizations[0]?.id ?? null);
-          setPlan(res.organizations[0]?.plan ?? 'FREE');
+          setOrganizationId(org?.id ?? null);
+          setPlan(org?.plan ?? 'FREE');
+          setName(org?.name ?? null);
+          setStreet(org?.street ?? null);
+          setCity(org?.city ?? null);
+          setTaxId(org?.taxId ?? null);
         }
       } catch {
         // Leave null/FREE — callers treat null the same as "no org yet".
@@ -50,5 +69,5 @@ export function useCallerOrganization(enabled: boolean): CallerOrganization {
     };
   }, [enabled]);
 
-  return { organizationId, plan, loading };
+  return { organizationId, plan, loading, name, street, city, taxId };
 }

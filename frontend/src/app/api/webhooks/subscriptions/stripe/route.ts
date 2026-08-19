@@ -19,10 +19,12 @@ import type Stripe from 'stripe';
 import { createWebhookHandler } from '@/lib/server/webhook/handler';
 import { stripeWebhookProvider, getStripeClient } from '@/lib/server/subscriptions/stripe';
 import { activateSubscription } from '@/lib/server/subscriptions/fulfillment';
+import { resolveOrganizationForAnonymousIntent } from '@/lib/server/subscriptions/anonymous';
 import { isPayablePlan } from '@/lib/server/subscriptions/types';
 import { getEmailQueue } from '@/lib/server/queues/email-queue-singleton';
 import {
   subscriptionConfirmedEmail,
+  subscriptionWelcomeEmail,
   subscriptionPaymentFailedEmail,
 } from '@/lib/server/subscriptions/confirmation-templates';
 import { prisma } from '@/lib/server/prisma';
@@ -65,12 +67,27 @@ export const POST = createWebhookHandler({
     }
     const plan = planRaw as 'PRO' | 'BUSINESS';
 
+    // `organizationId` is really an AnonymousSubscriptionIntent id when this
+    // Checkout was started from the public landing page (2026-08-19) rather
+    // than an authenticated org — see anonymous-checkout/route.ts, which
+    // reuses this same metadata field for its own opaque reference. Resolve
+    // (or create) the real org before activating, exactly once (guarded by
+    // the intent's own status).
+    const anonymousIntent = await tx.anonymousSubscriptionIntent.findUnique({
+      where: { id: organizationId },
+    });
+    if (anonymousIntent && anonymousIntent.status === 'SUCCEEDED') return {}; // idempotent replay
+    const resolution = anonymousIntent
+      ? await resolveOrganizationForAnonymousIntent(tx, anonymousIntent)
+      : null;
+    const realOrganizationId = resolution?.organizationId ?? organizationId;
+
     const currentPeriodEnd = new Date((sub.items.data[0]?.current_period_end ?? 0) * 1000);
     const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
     const amount = invoice.amount_paid ?? 0;
 
     await activateSubscription(tx, {
-      organizationId,
+      organizationId: realOrganizationId,
       plan,
       provider: 'STRIPE',
       providerRef: invoice.id ?? subscriptionId,
@@ -81,8 +98,20 @@ export const POST = createWebhookHandler({
       stripeSubscriptionId: sub.id,
     });
 
+    if (anonymousIntent && resolution) {
+      await tx.anonymousSubscriptionIntent.update({
+        where: { id: anonymousIntent.id },
+        data: {
+          status: 'SUCCEEDED',
+          succeededAt: new Date(),
+          organizationId: realOrganizationId,
+          resultKind: resolution.kind,
+        },
+      });
+    }
+
     const org = await tx.organization.findUnique({
-      where: { id: organizationId },
+      where: { id: realOrganizationId },
       select: { name: true, contactEmail: true, owner: { select: { email: true } } },
     });
 
@@ -90,12 +119,25 @@ export const POST = createWebhookHandler({
       postCommit: async () => {
         const emailQueue = getEmailQueue();
         if (!emailQueue || !org) return;
+
+        if (resolution?.kind === 'new_org_new_user' && anonymousIntent) {
+          const resetUrl = `${appUrl}/reset-password?email=${encodeURIComponent(anonymousIntent.email)}&code=${resolution.resetCode}`;
+          const tpl = subscriptionWelcomeEmail({ organizationName: org.name, plan, resetUrl });
+          await emailQueue.enqueue({
+            to: anonymousIntent.email,
+            subject: tpl.subject,
+            html: tpl.html,
+            text: tpl.text,
+          });
+          return;
+        }
+
         const to = org.contactEmail ?? org.owner.email;
         const tpl = subscriptionConfirmedEmail({
           organizationName: org.name,
           plan,
           currentPeriodEnd: currentPeriodEnd.toLocaleDateString('fr-FR'),
-          manageUrl: `${appUrl}/settings`,
+          manageUrl: `${appUrl}/profile`,
         });
         await emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
       },
@@ -129,7 +171,7 @@ export const POST = createWebhookHandler({
           const to = org.contactEmail ?? org.owner.email;
           const tpl = subscriptionPaymentFailedEmail({
             organizationName: org.name,
-            manageUrl: `${appUrl}/settings`,
+            manageUrl: `${appUrl}/profile`,
           });
           await emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
         },

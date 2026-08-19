@@ -20,6 +20,7 @@ import TopBar from '@/components/layout/TopBar';
 import StatCard from '@/components/dashboard/StatCard';
 import RevenueChart from '@/components/dashboard/RevenueChart';
 import QuickActions from '@/components/dashboard/QuickActions';
+import ExportMenu from '@/components/dashboard/ExportMenu';
 import InterventionRow, {
   type InterventionStatus,
 } from '@/components/interventions/InterventionRow';
@@ -84,12 +85,13 @@ export default function DashboardPage() {
   const [loadingStats, setLoadingStats] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
-  // Intervention table filters — the search bar lives in TopBar (was
-  // decorative, see TopBar.tsx), the rest render as a filter bar above the
-  // table. All are independent, AND-combined filters against
-  // /api/interventions (see that route's header comment for the new
-  // clientId/vehicleId/dateFrom/dateTo params).
-  const [q, setQ] = useState('');
+  // Intervention table filters — render as a filter bar above the table.
+  // All are independent, AND-combined filters against /api/interventions
+  // (see that route's header comment for the clientId/vehicleId/dateFrom/
+  // dateTo params). The free-text `q` search that used to live in TopBar
+  // was retired 2026-08-19 — that slot is now ExportMenu (see TopBar call
+  // below) — client/vehicle name search still works via the SearchSelect
+  // filters right below.
   const [status, setStatus] = useState<StatusFilter>('all');
   const [clientId, setClientId] = useState('');
   const [clientName, setClientName] = useState<string | null>(null);
@@ -111,11 +113,9 @@ export default function DashboardPage() {
   const [refreshTick, setRefreshTick] = useState(0);
   useRefetchOnFocus(() => setRefreshTick((t) => t + 1));
 
-  const filtersActive =
-    !!q.trim() || status !== 'all' || !!clientId || !!vehicleId || !!dateFrom || !!dateTo;
+  const filtersActive = status !== 'all' || !!clientId || !!vehicleId || !!dateFrom || !!dateTo;
 
   function resetFilters() {
-    setQ('');
     setStatus('all');
     setClientId('');
     setClientName(null);
@@ -293,7 +293,6 @@ export default function DashboardPage() {
     const t = setTimeout(async () => {
       try {
         const params = new URLSearchParams({ limit: '10' });
-        if (q.trim()) params.set('q', q.trim());
         if (status !== 'all') params.set('status', status);
         if (clientId) params.set('clientId', clientId);
         if (vehicleId) params.set('vehicleId', vehicleId);
@@ -319,7 +318,7 @@ export default function DashboardPage() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [organizationId, q, status, clientId, vehicleId, dateFrom, dateTo, refreshTick]);
+  }, [organizationId, status, clientId, vehicleId, dateFrom, dateTo, refreshTick]);
 
   if (!user) return null;
 
@@ -340,10 +339,9 @@ export default function DashboardPage() {
           "overflow-x-auto doesn't work inside a flex child" gotcha. */}
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar
-          searchValue={q}
-          onSearchChange={setQ}
           onNewIntervention={() => router.push('/interventions/new')}
           showUpgrade={!!organizationId && !!orgPlan && orgPlan !== 'BUSINESS'}
+          rightSlot={<ExportMenu plan={orgPlan} />}
         />
 
         {!checkingOrg && !organizationId && !bannerDismissed && (

@@ -36,6 +36,25 @@ export function subscriptionConfirmedEmail(args: {
   };
 }
 
+/** Sent once for a brand-new account created by the anonymous checkout flow
+ * (app/subscriptions/checkout) — the payment already succeeded; this is the
+ * "claim your account" step, not a routine password reset, hence distinct
+ * copy from resetPasswordEmail (lib/server/auth/email-templates.ts). */
+export function subscriptionWelcomeEmail(args: {
+  organizationName: string;
+  plan: 'PRO' | 'BUSINESS';
+  resetUrl: string;
+}): EmailTemplate {
+  const org = htmlEscape(args.organizationName);
+  return {
+    subject: `Bienvenue sur MekaSoft ${args.plan} !`,
+    html: brandedEmailHtml(
+      `<p>Bonjour,</p><p>Votre paiement pour <strong>${org}</strong> a bien été reçu — le plan <strong>${args.plan}</strong> est actif dès maintenant. Il ne reste qu'une étape : définissez votre mot de passe pour accéder à votre nouvel espace MekaSoft.</p><p style="margin:20px 0;">${brandButton('Définir mon mot de passe', args.resetUrl)}</p><p style="color:#6b7280;font-size:13px;">Ce lien expire dans quelques jours — pas d'urgence, mais ne tardez pas trop.</p>`,
+    ),
+    text: `Votre paiement pour ${args.organizationName} a bien été reçu — le plan ${args.plan} est actif. Définissez votre mot de passe pour y accéder : ${args.resetUrl}`,
+  };
+}
+
 export function subscriptionPaymentFailedEmail(args: {
   organizationName: string;
   manageUrl: string;

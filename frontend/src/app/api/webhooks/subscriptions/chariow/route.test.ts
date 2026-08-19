@@ -11,6 +11,8 @@ const orgUpdate = vi.fn();
 const orgFindUnique = vi.fn();
 const paymentCreate = vi.fn();
 const paymentUpdate = vi.fn();
+const anonymousIntentFindUnique = vi.fn();
+const anonymousIntentUpdate = vi.fn();
 
 const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
   fn({
@@ -22,6 +24,10 @@ const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
     },
     subscription: { upsert: subscriptionUpsert, findUnique: subscriptionFindUnique },
     organization: { update: orgUpdate, findUnique: orgFindUnique },
+    anonymousSubscriptionIntent: {
+      findUnique: anonymousIntentFindUnique,
+      update: anonymousIntentUpdate,
+    },
   }),
 );
 
@@ -36,8 +42,14 @@ vi.mock('@/lib/server/subscriptions/chariow', async () => {
   return { ...actual, getChariowSale: vi.fn() };
 });
 
+vi.mock('@/lib/server/subscriptions/anonymous', () => ({
+  resolveOrganizationForAnonymousIntent: vi.fn(),
+}));
+
 import { getChariowSale } from '@/lib/server/subscriptions/chariow';
+import { resolveOrganizationForAnonymousIntent } from '@/lib/server/subscriptions/anonymous';
 const mockGetSale = vi.mocked(getChariowSale);
+const mockResolveAnonymous = vi.mocked(resolveOrganizationForAnonymousIntent);
 
 const WEBHOOK_SECRET = 'test-chariow-secret';
 
@@ -54,6 +66,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   findUnique.mockResolvedValue(null);
   paymentFindUnique.mockResolvedValue(null);
+  // No matching AnonymousSubscriptionIntent by default — every existing
+  // test below exercises the authenticated (real-org) flow.
+  anonymousIntentFindUnique.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -76,6 +91,58 @@ describe('POST /api/webhooks/subscriptions/chariow', () => {
     const res = await POST(makeRequest({ event: 'settled.sale', data: { sale_id: 's1' } }));
     expect(res.status).toBe(200);
     expect(subscriptionUpsert).not.toHaveBeenCalled();
+  });
+
+  it('anonymous checkout — resolves the org, activates against it, and marks the intent SUCCEEDED', async () => {
+    mockGetSale.mockResolvedValueOnce({ status: 'succeeded', amount: 9_900, currency: 'XOF' });
+    anonymousIntentFindUnique.mockResolvedValueOnce({
+      id: 'intent_1',
+      email: 'nouveau@garage.test',
+      atelierName: 'Garage Ndiaye',
+      phone: '+221771234567',
+      plan: 'PRO',
+      provider: 'CHARIOW',
+      providerRef: 's_anon_1',
+      amount: 9_900,
+      currency: 'XOF',
+      status: 'PENDING',
+    });
+    mockResolveAnonymous.mockResolvedValueOnce({
+      kind: 'new_org_new_user',
+      organizationId: 'org_new',
+      resetCode: 'ABCD1234',
+    });
+    orgFindUnique.mockResolvedValue({
+      name: 'Garage Ndiaye',
+      contactEmail: null,
+      owner: { email: 'nouveau@garage.test' },
+    });
+    subscriptionFindUnique.mockResolvedValue({
+      currentPeriodEnd: new Date('2026-09-19T00:00:00Z'),
+    });
+
+    const { POST } = await import('./route');
+    const res = await POST(makeRequest({ event: 'settled.sale', data: { sale_id: 's_anon_1' } }));
+
+    expect(res.status).toBe(200);
+    expect(mockResolveAnonymous).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'intent_1' }),
+    );
+    expect(subscriptionUpsert).toHaveBeenCalled();
+    expect(orgUpdate).toHaveBeenCalledWith({
+      where: { id: 'org_new' },
+      data: { plan: 'PRO', planUpdatedAt: expect.any(Date) },
+    });
+    expect(anonymousIntentUpdate).toHaveBeenCalledWith({
+      where: { id: 'intent_1' },
+      data: {
+        status: 'SUCCEEDED',
+        succeededAt: expect.any(Date),
+        organizationId: 'org_new',
+        resultKind: 'new_org_new_user',
+      },
+    });
   });
 
   it('credits when the re-query confirms succeeded and a matching PENDING row exists', async () => {
