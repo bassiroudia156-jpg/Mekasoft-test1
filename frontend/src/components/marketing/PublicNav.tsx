@@ -23,7 +23,7 @@ export default function PublicNav() {
     <nav className="border-b border-border bg-background px-4 py-3 lg:px-12 lg:py-4 flex items-center justify-between">
       <div className="flex items-center gap-10">
         <Link href="/" aria-label="MekaSoft">
-          <BrandLogo variant="light" className="h-10 lg:h-12 w-auto" />
+          <BrandLogo variant="light" className="h-14 lg:h-16 w-auto" />
         </Link>
         <div className="hidden lg:flex gap-6">
           {NAV_LINKS.map((item) => (
