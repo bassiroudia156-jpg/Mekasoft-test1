@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
+import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
 import PageHeader from '@/components/ui/PageHeader';
 import Icon from '@/components/ui/Icon';
@@ -19,6 +20,13 @@ import UpgradeSubscriptionModal from '@/components/subscriptions/UpgradeSubscrip
 // Mirrors lib/server/plans/limits.ts's PLAN_PRICING/PLAN_LIMITS — same
 // local-copy convention as the landing page and Settings (that module lives
 // under lib/server/, this is client-rendered display copy).
+//
+// 2026-08-19: card visuals (dark inverted "featured" card, inline pill
+// badge, plain price stack, primary-outline buttons) now deliberately
+// mirror the landing page's #tarifs section (see page.tsx) — same pricing
+// design in both places, per user request. `badge` is new here for that
+// reason (landing shows "Populaire"/"Équipes" pills; this page previously
+// only had an absolute-positioned "Populaire" corner ribbon on Pro).
 const PLANS = [
   {
     plan: 'FREE' as const,
@@ -26,6 +34,7 @@ const PLANS = [
     blurb: 'Pour débuter',
     priceFcfa: 0,
     originalPriceFcfa: null as number | null,
+    badge: null as string | null,
     features: [
       { text: '3 clients max', included: true },
       { text: '3 véhicules max', included: true },
@@ -41,6 +50,7 @@ const PLANS = [
     priceFcfa: 9_900,
     originalPriceFcfa: 12_000,
     featured: true,
+    badge: 'Populaire' as string | null,
     features: [
       { text: 'Clients illimités', included: true },
       { text: 'Véhicules illimités', included: true },
@@ -55,6 +65,7 @@ const PLANS = [
     blurb: 'Pour les plus grands',
     priceFcfa: 19_900,
     originalPriceFcfa: 25_000,
+    badge: 'Équipes' as string | null,
     features: [
       { text: 'Tout Pro', included: true },
       { text: "Jusqu'à 5 utilisateurs", included: true },
@@ -95,6 +106,17 @@ export default function SubscriptionPlansPage() {
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'PRO' | 'BUSINESS'>('PRO');
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  // 2026-08-19: "je veux que le chargement des donnees soit en temps reel" —
+  // same refetch-on-focus convention as dashboard/page.tsx (see
+  // useRefetchOnFocus's own comment: no push channel in this app, so
+  // silently re-fetching on tab focus/visibility is the standard
+  // near-zero-cost stand-in). Matters here specifically because mobile
+  // money checkouts (Moneroo/Chariow) redirect out to a provider page and
+  // back — a user who completes payment in another tab and returns to this
+  // one should see "Plan actuel" flip without a manual reload.
+  useRefetchOnFocus(() => setRefreshTick((t) => t + 1));
 
   // Not gated on `user` (2026-08-19, same fix as Settings): these are
   // cookie-authenticated like every api() call, independent of AuthContext's
@@ -116,7 +138,7 @@ export default function SubscriptionPlansPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,61 +182,102 @@ export default function SubscriptionPlansPage() {
             Choisissez le forfait qui correspond aux besoins de votre atelier.
           </p>
 
-          {/* Plans grid — base: stacked, md+: 3 columns (Banani desktop grid) */}
+          {/* Plans grid — same card design as the landing page's #tarifs
+              section (dark inverted "featured" card, inline pill badge,
+              plain price stack, primary-outline buttons on the non-featured
+              tiers) so a logged-in upgrade and an anonymous visitor see the
+              identical pricing presentation. base: stacked, md+: 3 columns
+              (Banani desktop grid). */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
             {PLANS.map((p) => {
               const isCurrent = org?.plan === p.plan;
+              const featured = !!p.featured;
               return (
                 <div
                   key={p.plan}
-                  className={`bg-surface border rounded-lg p-6 flex flex-col gap-4 relative ${
-                    p.featured ? 'border-primary' : 'border-border'
+                  className={`rounded-lg lg:rounded-xl p-5 lg:p-8 flex flex-col ${
+                    featured ? 'bg-foreground' : 'bg-surface border border-border'
                   }`}
                 >
-                  {p.featured && (
-                    <div className="absolute top-4 right-4 px-2 py-1 bg-primary text-primary-foreground rounded text-xs font-medium">
-                      Populaire
-                    </div>
-                  )}
-
-                  <div>
-                    <h3 className="text-lg font-bold font-headings text-foreground">{p.label}</h3>
-                    <p className="text-sm text-muted-foreground mt-1">{p.blurb}</p>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h3
+                      className={`font-bold font-headings text-base lg:text-lg ${
+                        featured ? 'text-background' : 'text-foreground'
+                      }`}
+                    >
+                      {p.label}
+                    </h3>
+                    {p.badge && (
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full font-medium shrink-0 ${
+                          featured
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary text-secondary-foreground'
+                        }`}
+                      >
+                        {p.badge}
+                      </span>
+                    )}
                   </div>
-
-                  <div
-                    className={`border rounded-md p-4 ${
-                      p.featured ? 'bg-primary/10 border-primary' : 'bg-background border-border'
+                  <p
+                    className={`text-xs lg:text-sm mb-4 lg:mb-6 ${
+                      featured ? 'text-background/60' : 'text-muted-foreground'
                     }`}
                   >
-                    {p.originalPriceFcfa && (
-                      <div className="text-xs text-muted-foreground line-through mb-0.5">
-                        {p.originalPriceFcfa.toLocaleString('fr-FR')} FCFA
-                      </div>
-                    )}
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-bold text-foreground">
+                    {p.blurb}
+                  </p>
+
+                  <div className="mb-4 lg:mb-6">
+                    <div className="flex items-baseline gap-2 whitespace-nowrap">
+                      {p.originalPriceFcfa && (
+                        <span
+                          className={`text-sm lg:text-base line-through ${
+                            featured ? 'text-background/40' : 'text-muted-foreground/60'
+                          }`}
+                        >
+                          {p.originalPriceFcfa.toLocaleString('fr-FR')}
+                        </span>
+                      )}
+                      <span
+                        className={`text-2xl lg:text-4xl font-bold ${
+                          featured ? 'text-background' : 'text-foreground'
+                        }`}
+                      >
                         {p.priceFcfa.toLocaleString('fr-FR')}
                       </span>
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <span
+                      className={`text-xs lg:text-sm ${
+                        featured ? 'text-background/60' : 'text-muted-foreground'
+                      }`}
+                    >
                       {p.priceFcfa === 0 ? 'FCFA — à vie' : 'FCFA / mois'}
-                    </div>
+                    </span>
                   </div>
 
-                  <div className="flex flex-col gap-2">
+                  <div className="space-y-2 lg:space-y-3 mb-5 lg:mb-8 flex-1">
                     {p.features.map((f) => (
-                      <div key={f.text} className="flex items-start gap-2">
+                      <div key={f.text} className="flex items-center gap-2">
                         <Icon
                           i={f.included ? 'check' : 'x'}
-                          size={14}
-                          className={`mt-0.5 flex-shrink-0 ${
-                            f.included ? 'text-primary' : 'text-muted-foreground'
+                          size={13}
+                          className={`flex-shrink-0 w-[11px] h-[11px] lg:w-[13px] lg:h-[13px] ${
+                            f.included
+                              ? 'text-primary'
+                              : featured
+                                ? 'text-background/40'
+                                : 'text-muted-foreground'
                           }`}
                         />
                         <span
-                          className={`text-sm ${
-                            f.included ? 'text-foreground' : 'text-muted-foreground'
+                          className={`text-xs lg:text-sm ${
+                            f.included
+                              ? featured
+                                ? 'text-background/90'
+                                : 'text-foreground'
+                              : featured
+                                ? 'text-background/40'
+                                : 'text-muted-foreground'
                           }`}
                         >
                           {f.text}
@@ -223,30 +286,33 @@ export default function SubscriptionPlansPage() {
                     ))}
                   </div>
 
-                  <div className="mt-auto pt-2">
-                    {isCurrent ? (
-                      <div className="w-full px-4 py-2.5 border border-border text-muted-foreground rounded-md text-sm font-medium text-center">
-                        Plan actuel
-                      </div>
-                    ) : p.plan === 'FREE' ? (
-                      <div className="w-full px-4 py-2.5 text-xs text-muted-foreground text-center">
-                        Inclus par défaut
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openUpgrade(p.plan)}
-                        className={`w-full px-4 py-2.5 rounded-md text-sm font-medium flex items-center gap-2 justify-center transition-colors ${
-                          p.featured
-                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                            : 'border border-border text-foreground hover:bg-input'
-                        }`}
-                      >
-                        <Icon i="arrow-up-right" size={14} />
-                        Choisir {p.label}
-                      </button>
-                    )}
-                  </div>
+                  {isCurrent ? (
+                    <div
+                      className={`w-full py-2 lg:py-3 rounded lg:rounded-md text-xs lg:text-sm font-medium text-center border ${
+                        featured
+                          ? 'border-background/20 text-background/70'
+                          : 'border-border text-muted-foreground'
+                      }`}
+                    >
+                      Plan actuel
+                    </div>
+                  ) : p.plan === 'FREE' ? (
+                    <div className="w-full py-2 lg:py-3 text-xs text-muted-foreground text-center">
+                      Inclus par défaut
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => openUpgrade(p.plan)}
+                      className={`w-full py-2 lg:py-3 rounded lg:rounded-md text-xs lg:text-sm font-medium text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+                        featured
+                          ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                          : 'border border-primary text-primary hover:bg-primary/5'
+                      }`}
+                    >
+                      Choisir {p.label}
+                    </button>
+                  )}
                 </div>
               );
             })}
