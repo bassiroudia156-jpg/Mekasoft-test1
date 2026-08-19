@@ -177,7 +177,7 @@ export default function VehiclesPage() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="vehicles" onProfileClick={() => setProfileOpen(true)} />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow="Parc"
           title="Parc automobile"

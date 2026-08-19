@@ -280,7 +280,7 @@ function NewPaymentBody() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="payments" />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow={created ? 'Paiement enregistré' : 'Nouveau paiement'}
           title={created ? 'La transaction a été enregistrée' : 'Enregistrer un paiement'}

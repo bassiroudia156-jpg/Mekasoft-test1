@@ -123,7 +123,7 @@ export default function NewClientPage() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="clients" />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         {view === 'form' ? (
           <>
             <PageHeader

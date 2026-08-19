@@ -186,7 +186,7 @@ export default function Field({
             type="button"
             onClick={() => setPasswordVisible((v) => !v)}
             aria-label={passwordVisible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center text-muted-foreground"
           >
             <Icon i={passwordVisible ? 'eye' : 'eye-off'} size={14} />
           </button>

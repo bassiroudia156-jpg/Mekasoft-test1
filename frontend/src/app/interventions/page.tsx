@@ -122,7 +122,7 @@ export default function InterventionsPage() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="interventions" onProfileClick={() => setProfileOpen(true)} />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow="Interventions"
           title="Toutes les interventions"

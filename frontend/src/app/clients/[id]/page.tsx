@@ -187,7 +187,7 @@ export default function ClientProfilePage() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="clients" />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <div className="bg-surface border-b border-border px-4 py-4 lg:px-6 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <button

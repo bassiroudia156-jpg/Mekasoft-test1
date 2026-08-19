@@ -248,7 +248,7 @@ function NewInvoiceBody() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="invoices" />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow={created ? 'Facture créée' : 'Nouvelle facture'}
           title={created ? 'Facture émise avec succès' : 'Créer une facture'}

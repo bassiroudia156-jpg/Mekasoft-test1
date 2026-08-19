@@ -27,7 +27,7 @@ export default function PageHeader({ eyebrow, title, action }: PageHeaderProps) 
           type="button"
           onClick={toggle}
           aria-label="Ouvrir le menu"
-          className="lg:hidden w-9 h-9 flex items-center justify-center rounded-sm border border-border text-foreground shrink-0"
+          className="lg:hidden w-11 h-11 flex items-center justify-center rounded-sm border border-border text-foreground shrink-0"
         >
           <Icon i="menu" size={18} />
         </button>

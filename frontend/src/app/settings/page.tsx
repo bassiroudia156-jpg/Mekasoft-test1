@@ -166,10 +166,10 @@ export default function SettingsPage() {
     <div className="flex min-h-screen bg-background">
       <Sidebar active="settings" onProfileClick={() => setProfileOpen(true)} />
 
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <PageHeader eyebrow="Paramètres" title="Paramètres du compte" />
 
-        <div className="flex-1 p-6 flex flex-col gap-6 max-w-2xl">
+        <div className="flex-1 w-full p-6 flex flex-col gap-6 max-w-2xl lg:mx-auto">
           {/* Compte */}
           <FormSection title="Compte">
             <div className="flex flex-col gap-4">

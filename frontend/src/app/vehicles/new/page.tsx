@@ -133,7 +133,7 @@ function NewVehicleBody() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="vehicles" />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow={lockedClientId ? 'Nouveau client' : 'Parc'}
           title="Ajouter un véhicule"

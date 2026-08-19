@@ -100,7 +100,7 @@ export default function ClientsPage() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="clients" onProfileClick={() => setProfileOpen(true)} />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow="Clients"
           title="Annuaire des clients"

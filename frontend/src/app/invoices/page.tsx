@@ -158,7 +158,7 @@ function InvoicesListBody() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="invoices" onProfileClick={() => setProfileOpen(true)} />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow="Factures"
           title="Toutes les factures"

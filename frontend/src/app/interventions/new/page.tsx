@@ -295,7 +295,7 @@ function NewInterventionBody() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="interventions" />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow={created ? 'Intervention créée' : 'Nouvelle intervention'}
           title={

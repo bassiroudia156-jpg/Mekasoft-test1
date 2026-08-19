@@ -93,7 +93,7 @@ export default function InterventionDevisPage() {
         <Sidebar active="interventions" />
       </div>
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <div className="print-hide bg-surface border-b border-border px-4 py-4 lg:px-6 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <button

@@ -171,14 +171,14 @@ export default function EditShopSettingsPage() {
     <div className="flex min-h-screen bg-background">
       <Sidebar active="settings" onProfileClick={() => setProfileOpen(true)} />
 
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <PageHeader eyebrow="Paramètres" title="Modifier l'atelier" />
 
         <div className="flex-1 p-6">
           {loading ? (
             <p className="text-sm text-muted-foreground">Chargement…</p>
           ) : (
-            <form onSubmit={onSubmit} className="flex flex-col gap-6 max-w-2xl">
+            <form onSubmit={onSubmit} className="flex flex-col gap-6 max-w-2xl lg:mx-auto">
               <FormSection title="Image de marque">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-md border border-border bg-input flex items-center justify-center overflow-hidden shrink-0">

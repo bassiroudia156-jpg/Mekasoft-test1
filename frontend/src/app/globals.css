@@ -58,9 +58,22 @@
   --text-4xl: 48px;
 }
 
+/* Defensive: nothing in this app should ever cause the page itself to
+ * scroll sideways — wide tables scroll inside their own overflow-x-auto
+ * wrapper (see clients/vehicles/interventions/invoices/payments), and
+ * off-canvas panels (SlideOver) are positioned via transform. Both patterns
+ * already behave, but a stray min-w-[Npx] without min-w-0 on its flex
+ * ancestor (a real bug fixed 2026-08-19 on all 5 table pages) or a future
+ * one like it should degrade to "content clipped", never "whole page
+ * scrolls right" — this rule is the backstop for that class of bug. */
+html {
+  overflow-x: hidden;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
+  overflow-x: hidden;
 }
 
 /* Marketing-site micro-interactions (2026-08-18 request: "un peu

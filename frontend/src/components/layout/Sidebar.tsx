@@ -85,7 +85,7 @@ export default function Sidebar({ active, onProfileClick }: SidebarProps) {
             type="button"
             onClick={close}
             aria-label="Fermer le menu"
-            className="lg:hidden w-7 h-7 flex items-center justify-center rounded-sm text-primary-foreground/60 hover:text-primary-foreground"
+            className="lg:hidden w-11 h-11 flex items-center justify-center rounded-sm text-primary-foreground/60 hover:text-primary-foreground"
           >
             <Icon i="x" size={16} />
           </button>

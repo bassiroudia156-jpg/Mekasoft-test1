@@ -166,7 +166,7 @@ function PaymentsListBody() {
     <div className="flex bg-background min-h-screen">
       <Sidebar active="payments" onProfileClick={() => setProfileOpen(true)} />
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
           eyebrow="Gestion financière"
           title="Paiements"
