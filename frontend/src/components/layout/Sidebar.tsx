@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 import BrandLogo from '@/components/ui/BrandLogo';
@@ -7,6 +9,7 @@ import UserAvatar from '@/components/ui/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMobileSidebar } from '@/contexts/MobileSidebarContext';
 import { orgRoleLabel } from '@/lib/roleLabel';
+import LogoutConfirmModal from '@/components/auth/LogoutConfirmModal';
 
 export type SidebarActiveKey =
   | 'dashboard'
@@ -15,16 +18,19 @@ export type SidebarActiveKey =
   | 'vehicles'
   | 'invoices'
   | 'payments'
-  | 'settings'
+  | 'export'
   // Not a NAV_ITEMS entry (the account block below isn't part of that list)
   // — exists purely so /profile can pass an honest value instead of lying
-  // with 'settings', which would wrongly highlight "Paramètres".
+  // with 'export', which would wrongly highlight "Export".
   | 'profile';
 
 // Every item now has a real route. This was a plain `<a href="#">` through
 // Phases 1–5 (the sidebar never actually navigated), fixed while wiring
 // /invoices in Phase 6; "Paiements" was the last `href: null` holdout,
-// filled in Phase 7. "Paramètres" added in Phase 8.
+// filled in Phase 7. "Paramètres" added in Phase 8, renamed to "Export"
+// 2026-08-19 — Atelier and Abonnement moved into /profile (see that page's
+// header comment), so this item's scope shrank to just the Business-only
+// reports/CSV export surface and the label now says what it actually does.
 const NAV_ITEMS: { id: SidebarActiveKey; icon: string; label: string; href: string }[] = [
   { id: 'dashboard', icon: 'layout-dashboard', label: 'Tableau de bord', href: '/dashboard' },
   { id: 'interventions', icon: 'wrench', label: 'Interventions', href: '/interventions' },
@@ -32,7 +38,7 @@ const NAV_ITEMS: { id: SidebarActiveKey; icon: string; label: string; href: stri
   { id: 'vehicles', icon: 'car', label: 'Véhicules', href: '/vehicles' },
   { id: 'invoices', icon: 'file-text', label: 'Factures', href: '/invoices' },
   { id: 'payments', icon: 'banknote', label: 'Paiements', href: '/payments' },
-  { id: 'settings', icon: 'settings', label: 'Paramètres', href: '/settings' },
+  { id: 'export', icon: 'download', label: 'Export', href: '/export' },
 ];
 
 export interface SidebarProps {
@@ -54,10 +60,23 @@ export interface SidebarProps {
 // context rather than a prop passed down from each page). At `lg:` and up
 // it reverts to the original always-visible static column, unchanged.
 export default function Sidebar({ active }: SidebarProps) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
   const { open, close } = useMobileSidebar();
   const displayName = user?.name ?? user?.email ?? 'Mon compte';
   const displayRole = user ? orgRoleLabel(user.orgRole, user.jobTitle) : '';
+
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function confirmLogout() {
+    setLoggingOut(true);
+    await logout();
+    setLoggingOut(false);
+    setLogoutModalOpen(false);
+    close();
+    router.push('/login?logged_out=1');
+  }
 
   return (
     <>
@@ -117,8 +136,11 @@ export default function Sidebar({ active }: SidebarProps) {
             as a right-side slide-over; per user feedback that felt cramped
             for what's really a whole account-settings surface (personal
             info, security, team, logout), so it's now a real page like
-            everything else in the nav. */}
-        <div className="px-3 pb-4 border-t border-primary-foreground/10 pt-4">
+            everything else in the nav. A direct "Déconnexion" button was
+            added right below it (2026-08-19, follow-up feedback) — the
+            profile page already has one, but users expect to be able to
+            log out from the sidebar itself without an extra navigation. */}
+        <div className="px-3 pb-4 border-t border-primary-foreground/10 pt-4 flex flex-col gap-1">
           <Link
             href="/profile"
             onClick={close}
@@ -130,8 +152,27 @@ export default function Sidebar({ active }: SidebarProps) {
               <div className="text-primary-foreground/50 text-xs">{displayRole}</div>
             </div>
           </Link>
+          <button
+            type="button"
+            onClick={() => setLogoutModalOpen(true)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-sm text-sm font-medium text-primary-foreground/60 hover:bg-primary-foreground/10 hover:text-primary-foreground text-left"
+          >
+            <Icon i="log-out" size={16} />
+            Déconnexion
+          </button>
         </div>
       </div>
+
+      {user && (
+        <LogoutConfirmModal
+          open={logoutModalOpen}
+          onCancel={() => setLogoutModalOpen(false)}
+          onConfirm={() => void confirmLogout()}
+          userEmail={user.email}
+          userLabel={`${displayName} • ${displayRole}`}
+          confirming={loggingOut}
+        />
+      )}
     </>
   );
 }

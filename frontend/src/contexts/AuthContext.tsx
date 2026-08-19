@@ -41,6 +41,22 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// 2026-08-19: set right before an explicit logout() clears `user`, read by
+// useUser()'s own auto-redirect effect below. Every logout entry point
+// (Sidebar, /profile, PublicNav) already does its own
+// `router.push('/login?logged_out=1')` right after `await logout()` — but
+// useUser()'s protective "no session, bounce to redirectTo" effect ALSO
+// fires the instant `user` flips to null (same render, since both read the
+// same state), and since both are `router.*` calls racing to update the
+// same history entry, whichever commits second wins and can silently drop
+// the query string, killing the "you were logged out" toast on /login.
+// Rather than fight that ordering, make both navigations resolve to the
+// identical URL: this flag carries the query string over to the automatic
+// redirect so it doesn't matter which one "wins". Cleared on the next
+// successful fetchUser() so a later silent session expiry (not a real
+// logout) doesn't misreport itself as one.
+let pendingLogoutQuery = '';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api<{ user: User; csrfToken?: string }>('/api/auth/me');
       setUser(res.user);
+      pendingLogoutQuery = '';
       if (res.csrfToken) storeCsrfToken(res.csrfToken);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -94,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     clearCsrfToken();
     invalidateCachePrefix('/api/');
+    pendingLogoutQuery = '?logged_out=1';
     setUser(null);
     setLoggingOut(false);
   }, []);
@@ -145,7 +163,10 @@ export function useUser(redirectTo: string = '/login'): User | null {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace(redirectTo);
+      const target = pendingLogoutQuery
+        ? `${redirectTo}${redirectTo.includes('?') ? '&' : '?'}${pendingLogoutQuery.slice(1)}`
+        : redirectTo;
+      router.replace(target);
     }
   }, [loading, user, redirectTo, router]);
 
