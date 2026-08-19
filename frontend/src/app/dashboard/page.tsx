@@ -33,6 +33,7 @@ interface OrgSummary {
   id: string;
   slug: string;
   name: string;
+  plan: string;
 }
 
 interface RecentIntervention {
@@ -76,6 +77,7 @@ export default function DashboardPage() {
 
   const [checkingOrg, setCheckingOrg] = useState(true);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [orgPlan, setOrgPlan] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -149,7 +151,10 @@ export default function DashboardPage() {
         const res = await api<{ organizations: OrgSummary[] }>('/api/organizations');
         // V1 is single-org-per-user (see Phase 2) — the first membership is
         // the only one that matters.
-        if (!cancelled) setOrganizationId(res.organizations[0]?.id ?? null);
+        if (!cancelled) {
+          setOrganizationId(res.organizations[0]?.id ?? null);
+          setOrgPlan(res.organizations[0]?.plan ?? null);
+        }
       } catch {
         // Network hiccup — default to not showing the banner rather than
         // nagging a user who likely does have an org.
@@ -338,6 +343,7 @@ export default function DashboardPage() {
           searchValue={q}
           onSearchChange={setQ}
           onNewIntervention={() => router.push('/interventions/new')}
+          showUpgrade={!!organizationId && !!orgPlan && orgPlan !== 'BUSINESS'}
         />
 
         {!checkingOrg && !organizationId && !bannerDismissed && (
