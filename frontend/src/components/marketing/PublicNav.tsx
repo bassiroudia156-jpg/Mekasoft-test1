@@ -27,9 +27,10 @@ const NAV_LINKS = [
 //
 // 2026-08-19: client component now (was a plain server component, "no
 // client JS needed" per LandingPage's own old comment) — needs useAuth() to
-// swap "Se connecter"/"Commencer gratuitement" for a single "Se déconnecter"
-// when the visitor already has a session, so an already-logged-in user
-// landing on the public marketing pages isn't offered a signup CTA. Briefly
+// swap "Se connecter"/"Commencer gratuitement" for "Retour au dashboard" +
+// "Se déconnecter" when the visitor already has a session, so an
+// already-logged-in user landing on the public marketing pages isn't
+// offered a signup CTA and has a one-click way back to their app. Briefly
 // shows the logged-out buttons while the auth check resolves (this app's
 // auth state is entirely client-driven, see AuthContext) — same trade-off
 // every client-auth page in this app already accepts.
@@ -68,13 +69,22 @@ export default function PublicNav() {
       </div>
       <div className="flex items-center gap-3">
         {isLoggedIn ? (
-          <button
-            type="button"
-            onClick={() => setLogoutModalOpen(true)}
-            className="text-xs lg:text-sm bg-primary text-primary-foreground font-medium px-3 py-2 lg:px-4 rounded-md hover:bg-primary/90 hover:scale-[1.04] active:scale-[0.97] transition-all duration-200"
-          >
-            Se déconnecter
-          </button>
+          <>
+            <Link
+              href="/dashboard"
+              className="text-xs lg:text-sm text-foreground font-medium px-3 py-2 lg:px-4 border border-border rounded-md hover:border-primary hover:text-primary transition-colors duration-150"
+            >
+              <span className="lg:hidden">Dashboard</span>
+              <span className="hidden lg:inline">Retour au dashboard</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setLogoutModalOpen(true)}
+              className="text-xs lg:text-sm bg-primary text-primary-foreground font-medium px-3 py-2 lg:px-4 rounded-md hover:bg-primary/90 hover:scale-[1.04] active:scale-[0.97] transition-all duration-200"
+            >
+              Se déconnecter
+            </button>
+          </>
         ) : (
           <>
             <Link
