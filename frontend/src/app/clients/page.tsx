@@ -7,10 +7,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
-import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
-import ManagerProfilePanel from '@/components/layout/ManagerProfilePanel';
 import ClientRow from '@/components/clients/ClientRow';
 import PageHeader from '@/components/ui/PageHeader';
 import FilterButton from '@/components/ui/FilterButton';
@@ -33,8 +31,6 @@ type StatusFilter = 'all' | 'actif' | 'inactif';
 export default function ClientsPage() {
   const user = useUser();
   const router = useRouter();
-  const { organizationId } = useCallerOrganization(!!user);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const [items, setItems] = useState<ClientListItem[]>([]);
   const [counts, setCounts] = useState({ total: 0, actif: 0, inactif: 0 });
@@ -98,7 +94,7 @@ export default function ClientsPage() {
 
   return (
     <div className="flex bg-background min-h-screen">
-      <Sidebar active="clients" onProfileClick={() => setProfileOpen(true)} />
+      <Sidebar active="clients" />
 
       <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
@@ -226,12 +222,6 @@ export default function ClientsPage() {
           </div>
         </div>
       </div>
-
-      <ManagerProfilePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        organizationId={organizationId}
-      />
     </div>
   );
 }

@@ -18,10 +18,8 @@ import { useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
-import ManagerProfilePanel from '@/components/layout/ManagerProfilePanel';
 import PaymentRow, {
   type PaymentStatus,
   type PaymentMethod,
@@ -70,10 +68,8 @@ function formatCompact(n: number): string {
 function PaymentsListBody() {
   const user = useUser();
   const { toast } = useToast();
-  const { organizationId } = useCallerOrganization(!!user);
   const searchParams = useSearchParams();
   const cancelled = searchParams.get('cancelled') === '1';
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const [items, setItems] = useState<PaymentListItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({ total: 0 });
@@ -164,7 +160,7 @@ function PaymentsListBody() {
 
   return (
     <div className="flex bg-background min-h-screen">
-      <Sidebar active="payments" onProfileClick={() => setProfileOpen(true)} />
+      <Sidebar active="payments" />
 
       <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
@@ -348,12 +344,6 @@ function PaymentsListBody() {
           </div>
         </div>
       </div>
-
-      <ManagerProfilePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        organizationId={organizationId}
-      />
     </div>
   );
 }

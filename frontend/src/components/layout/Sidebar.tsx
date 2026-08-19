@@ -15,7 +15,11 @@ export type SidebarActiveKey =
   | 'vehicles'
   | 'invoices'
   | 'payments'
-  | 'settings';
+  | 'settings'
+  // Not a NAV_ITEMS entry (the account block below isn't part of that list)
+  // — exists purely so /profile can pass an honest value instead of lying
+  // with 'settings', which would wrongly highlight "Paramètres".
+  | 'profile';
 
 // Every item now has a real route. This was a plain `<a href="#">` through
 // Phases 1–5 (the sidebar never actually navigated), fixed while wiring
@@ -33,7 +37,6 @@ const NAV_ITEMS: { id: SidebarActiveKey; icon: string; label: string; href: stri
 
 export interface SidebarProps {
   active: SidebarActiveKey;
-  onProfileClick?: () => void;
 }
 
 // Phase 8: the bottom account block used to hardcode 'Mon compte'/'Gérant'
@@ -50,7 +53,7 @@ export interface SidebarProps {
 // TopBar/PageHeader (see MobileSidebarContext for why the toggle lives in a
 // context rather than a prop passed down from each page). At `lg:` and up
 // it reverts to the original always-visible static column, unchanged.
-export default function Sidebar({ active, onProfileClick }: SidebarProps) {
+export default function Sidebar({ active }: SidebarProps) {
   const { user } = useAuth();
   const { open, close } = useMobileSidebar();
   const displayName = user?.name ?? user?.email ?? 'Mon compte';
@@ -109,14 +112,16 @@ export default function Sidebar({ active, onProfileClick }: SidebarProps) {
           ))}
         </nav>
 
-        {/* Bottom — account block */}
+        {/* Bottom — account block. Navigates to the full /profile page
+            (2026-08-19) — used to open the "Mon profil" ManagerProfilePanel
+            as a right-side slide-over; per user feedback that felt cramped
+            for what's really a whole account-settings surface (personal
+            info, security, team, logout), so it's now a real page like
+            everything else in the nav. */}
         <div className="px-3 pb-4 border-t border-primary-foreground/10 pt-4">
-          <button
-            type="button"
-            onClick={() => {
-              close();
-              onProfileClick?.();
-            }}
+          <Link
+            href="/profile"
+            onClick={close}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-sm hover:bg-primary-foreground/10 text-left"
           >
             <UserAvatar name={displayName} src={user?.avatarUrl} className="w-8 h-8 rounded-sm" />
@@ -124,7 +129,7 @@ export default function Sidebar({ active, onProfileClick }: SidebarProps) {
               <div className="text-primary-foreground text-sm font-medium">{displayName}</div>
               <div className="text-primary-foreground/50 text-xs">{displayRole}</div>
             </div>
-          </button>
+          </Link>
         </div>
       </div>
     </>

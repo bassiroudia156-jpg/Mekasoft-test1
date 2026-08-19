@@ -10,10 +10,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
-import ManagerProfilePanel from '@/components/layout/ManagerProfilePanel';
 import InvoiceRow, { type InvoiceStatus } from '@/components/invoices/InvoiceRow';
 import ResendInvoiceModal from '@/components/invoices/ResendInvoiceModal';
 import PageHeader from '@/components/ui/PageHeader';
@@ -53,10 +51,8 @@ function InvoicesListBody() {
   const user = useUser();
   const router = useRouter();
   const { toast } = useToast();
-  const { organizationId } = useCallerOrganization(!!user);
   const searchParams = useSearchParams();
   const createdId = searchParams.get('created');
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const [items, setItems] = useState<InvoiceListItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({ total: 0 });
@@ -156,7 +152,7 @@ function InvoicesListBody() {
 
   return (
     <div className="flex bg-background min-h-screen">
-      <Sidebar active="invoices" onProfileClick={() => setProfileOpen(true)} />
+      <Sidebar active="invoices" />
 
       <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
@@ -281,12 +277,6 @@ function InvoicesListBody() {
           </div>
         </div>
       </div>
-
-      <ManagerProfilePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        organizationId={organizationId}
-      />
 
       {resendTarget && (
         <ResendInvoiceModal

@@ -17,7 +17,6 @@ import { formatInterventionDate } from '@/lib/format-intervention-date';
 import { formatCompactAmount } from '@/lib/format-compact-fcfa';
 import Sidebar from '@/components/layout/Sidebar';
 import TopBar from '@/components/layout/TopBar';
-import ManagerProfilePanel from '@/components/layout/ManagerProfilePanel';
 import StatCard from '@/components/dashboard/StatCard';
 import RevenueChart from '@/components/dashboard/RevenueChart';
 import QuickActions from '@/components/dashboard/QuickActions';
@@ -79,7 +78,6 @@ export default function DashboardPage() {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -326,7 +324,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex bg-background min-h-screen">
-      <Sidebar active="dashboard" onProfileClick={() => setProfileOpen(true)} />
+      <Sidebar active="dashboard" />
 
       {/* min-w-0 is load-bearing: without it, this flex item's default
           min-width:auto floors its size at its widest uncontained
@@ -665,12 +663,6 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
-
-      <ManagerProfilePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        organizationId={organizationId}
-      />
     </div>
   );
 }

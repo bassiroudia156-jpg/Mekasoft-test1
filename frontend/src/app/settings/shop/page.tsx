@@ -12,10 +12,8 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { uploadFile } from '@/lib/uploadFile';
 import { useUser } from '@/contexts/AuthContext';
-import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { useToast } from '@/contexts/ToastContext';
 import Sidebar from '@/components/layout/Sidebar';
-import ManagerProfilePanel from '@/components/layout/ManagerProfilePanel';
 import PageHeader from '@/components/ui/PageHeader';
 import FormSection from '@/components/ui/FormSection';
 import Field from '@/components/ui/Field';
@@ -45,8 +43,6 @@ export default function EditShopSettingsPage() {
   const user = useUser();
   const router = useRouter();
   const { toast } = useToast();
-  const { organizationId, loading: orgLoading } = useCallerOrganization(!!user);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -72,9 +68,17 @@ export default function EditShopSettingsPage() {
   const canEdit = user?.orgRole === 'OWNER' || user?.orgRole === 'ADMIN';
   const canBrand = plan === 'PRO' || plan === 'BUSINESS';
 
+  // Role/org-membership gate now reads straight off `user` (AuthContext's
+  // GET /api/auth/me already returns organizationId/orgRole — see Phase 8)
+  // instead of a second useCallerOrganization() hook, which fired its own
+  // duplicate, serialized GET /api/organizations in front of this effect's
+  // own fetch of the same endpoint (2026-08-19 fix, same root cause as
+  // Settings and Subscription Plans). One fetch now, and it starts
+  // immediately once `user` is known instead of waiting on a second
+  // network round-trip first.
   useEffect(() => {
-    if (!user || orgLoading) return;
-    if (!organizationId || !canEdit) {
+    if (!user) return;
+    if (!user.organizationId || !canEdit) {
       router.replace('/settings');
       return;
     }
@@ -105,7 +109,7 @@ export default function EditShopSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [user, orgLoading, organizationId, canEdit]);
+  }, [user, canEdit]);
 
   if (!user) return null;
 
@@ -169,7 +173,7 @@ export default function EditShopSettingsPage() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar active="settings" onProfileClick={() => setProfileOpen(true)} />
+      <Sidebar active="settings" />
 
       <div className="flex-1 flex flex-col min-w-0">
         <PageHeader eyebrow="Paramètres" title="Modifier l'atelier" />
@@ -314,12 +318,6 @@ export default function EditShopSettingsPage() {
           )}
         </div>
       </div>
-
-      <ManagerProfilePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        organizationId={organizationId}
-      />
     </div>
   );
 }

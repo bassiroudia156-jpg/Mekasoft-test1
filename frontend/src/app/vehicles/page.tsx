@@ -10,10 +10,8 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
-import ManagerProfilePanel from '@/components/layout/ManagerProfilePanel';
 import VehicleRow from '@/components/vehicles/VehicleRow';
 import EditVehicleModal from '@/components/vehicles/EditVehicleModal';
 import DeleteVehicleModal, {
@@ -42,8 +40,6 @@ type StatusFilter = 'all' | 'Actif' | 'Inactif';
 export default function VehiclesPage() {
   const user = useUser();
   const { toast } = useToast();
-  const { organizationId } = useCallerOrganization(!!user);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const [items, setItems] = useState<VehicleListItem[]>([]);
   const [counts, setCounts] = useState({ total: 0, Actif: 0, Inactif: 0 });
@@ -175,7 +171,7 @@ export default function VehiclesPage() {
 
   return (
     <div className="flex bg-background min-h-screen">
-      <Sidebar active="vehicles" onProfileClick={() => setProfileOpen(true)} />
+      <Sidebar active="vehicles" />
 
       <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
@@ -325,12 +321,6 @@ export default function VehiclesPage() {
           </div>
         </div>
       </div>
-
-      <ManagerProfilePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        organizationId={organizationId}
-      />
 
       <DeleteVehicleModal
         target={deleteTarget}

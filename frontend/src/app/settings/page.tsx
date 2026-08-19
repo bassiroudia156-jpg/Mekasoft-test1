@@ -1,28 +1,22 @@
 // Ported from Banani SettingsPage(+_next1, identical content — one
-// canonical page). Sections: Compte / Sécurité / Atelier.
+// canonical page). Sections: Rapport mensuel / Export de données / Atelier
+// / Abonnement — atelier/business-level settings only.
 //
-// This route previously held a generic pre-Banani stub (plain gray
-// Tailwind, no Sidebar/layout) with two real working flows: password
-// change/set branching and Google-account linking. Both are preserved here,
-// relocated rather than dropped (see phase-8-settings.md Decision 8):
-//   - password change/set now lives in ChangePasswordModal
-//   - Google-link becomes a third row in "Sécurité" (no Banani screen shows
-//     it, but it's real shipped functionality with nowhere else to live)
-//
-// The 2FA row is informational only (no "Activer" — no 2FA infra exists,
-// Decision 6). The upgrade-to-Pro banner is dropped entirely (Decision 7).
+// 2026-08-19: Compte (name/email/phone) and Sécurité (password, 2FA,
+// Google-link) were retired from this page and moved to the new full-page
+// /profile (per user feedback: personal-account info duplicated what the
+// "Mon profil" slide-over already showed, and belongs with it, not here).
+// Removing those two sections promotes Rapport mensuel to the first section
+// on the page — same "où il y avait les infos perso" slot the user asked
+// the reports/export section to occupy.
 'use client';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
-import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { useToast } from '@/contexts/ToastContext';
 import Sidebar from '@/components/layout/Sidebar';
-import ManagerProfilePanel from '@/components/layout/ManagerProfilePanel';
-import ChangePasswordModal from '@/components/account/ChangePasswordModal';
-import EditProfileModal from '@/components/account/EditProfileModal';
 import UpgradeSubscriptionModal from '@/components/subscriptions/UpgradeSubscriptionModal';
 import PageHeader from '@/components/ui/PageHeader';
 import FormSection from '@/components/ui/FormSection';
@@ -95,18 +89,21 @@ const PLAN_INFO: Record<string, { label: string; blurb: string; badge: string }>
 export default function SettingsPage() {
   const user = useUser();
   const { toast } = useToast();
-  const { organizationId } = useCallerOrganization(!!user);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [org, setOrg] = useState<OrgSummary | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
 
+  // Not gated on `user` (2026-08-19): these two calls are cookie-authenticated
+  // like every other api() call, not dependent on AuthContext's client-side
+  // `user` state — waiting for `user` to resolve first serialized this page
+  // behind a full extra GET /api/auth/me round-trip (the slowest single call
+  // on this page against Neon) for no reason. Firing on mount lets both race
+  // AuthContext's own fetch instead of queuing behind it. useUser()'s own
+  // effect still handles the logged-out redirect; a stray 401 here while
+  // that redirect is in flight is harmless (both setters just no-op via catch).
   useEffect(() => {
-    if (!user) return;
     let cancelled = false;
     (async () => {
       try {
@@ -119,10 +116,9 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (!user) return;
     let cancelled = false;
     (async () => {
       try {
@@ -159,184 +155,27 @@ export default function SettingsPage() {
 
   if (!user) return null;
 
-  const googleLinked = user.linkedProviders.includes('google');
+  // Derived from the single `org` fetch below rather than a second,
+  // duplicate GET /api/organizations (this page previously also called
+  // useCallerOrganization(), which fires its own identical request —
+  // removed 2026-08-19, was doubling this page's slowest network
+  // round-trip for no benefit since `org` already carries `id`).
+  const organizationId = org?.id ?? null;
   const canEditShop = user.orgRole === 'OWNER' || user.orgRole === 'ADMIN';
+  // EXPIRED/CANCELED rows still exist in the DB (downgrade.ts never
+  // deletes them) but don't entitle the org to anything anymore — treat
+  // those the same as "no subscription" for which UI to show.
+  const hasActiveOrGraceSubscription =
+    !!subscription && (subscription.status === 'ACTIVE' || subscription.status === 'GRACE');
 
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar active="settings" onProfileClick={() => setProfileOpen(true)} />
+      <Sidebar active="settings" />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <PageHeader eyebrow="Paramètres" title="Paramètres du compte" />
+        <PageHeader eyebrow="Paramètres" title="Atelier & abonnement" />
 
         <div className="flex-1 w-full p-6 flex flex-col gap-6 max-w-2xl lg:mx-auto">
-          {/* Compte */}
-          <FormSection title="Compte">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-muted-foreground uppercase tracking-widest">
-                  Nom
-                </label>
-                <div className="border border-border rounded-md px-3 py-2 bg-input text-sm text-foreground">
-                  {user.name || '—'}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-muted-foreground uppercase tracking-widest">
-                  Email
-                </label>
-                <div className="border border-border rounded-md px-3 py-2 bg-input text-sm text-foreground">
-                  {user.email}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-muted-foreground uppercase tracking-widest">
-                  Téléphone
-                </label>
-                <div className="border border-border rounded-md px-3 py-2 bg-input text-sm text-foreground">
-                  {user.phone || '—'}
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="self-start"
-                onClick={() => setEditProfileOpen(true)}
-              >
-                <Icon i="pencil" size={14} />
-                Modifier les informations
-              </Button>
-            </div>
-          </FormSection>
-
-          {/* Sécurité */}
-          <FormSection title="Sécurité">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-border">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Mot de passe</p>
-                  <p className="text-xs text-muted-foreground">
-                    {user.hasPassword ? 'Défini' : 'Non défini (connexion via Google)'}
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => setChangePasswordOpen(true)}>
-                  {user.hasPassword ? 'Changer' : 'Définir'}
-                </Button>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 py-2 border-b border-border">
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Authentification à deux facteurs
-                  </p>
-                  <p className="text-xs text-muted-foreground">Non activée</p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 py-2">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Compte Google</p>
-                  <p className="text-xs text-muted-foreground">
-                    {googleLinked
-                      ? 'Tu peux te connecter via Google.'
-                      : 'Lie ton compte pour te connecter en un clic.'}
-                  </p>
-                </div>
-                {googleLinked ? (
-                  <span className="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-medium text-success">
-                    Lié
-                  </span>
-                ) : (
-                  <a
-                    href="/api/auth/oauth/google/start?next=/settings"
-                    className="inline-flex items-center justify-center gap-2 rounded-sm border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-input"
-                  >
-                    Lier Google
-                  </a>
-                )}
-              </div>
-            </div>
-          </FormSection>
-
-          {/* Plan */}
-          {organizationId && org && (
-            <FormSection title="Abonnement">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        (PLAN_INFO[org.plan] ?? PLAN_INFO.FREE)!.badge
-                      }`}
-                    >
-                      Plan {(PLAN_INFO[org.plan] ?? PLAN_INFO.FREE)!.label}
-                    </span>
-                    {subscription && subscription.status === 'GRACE' && (
-                      <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-semibold text-warning">
-                        Paiement en retard
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {(PLAN_INFO[org.plan] ?? PLAN_INFO.FREE)!.blurb}
-                </p>
-
-                {subscription && (
-                  <div className="flex flex-col gap-1 rounded-md border border-border bg-input px-3 py-2.5 text-xs">
-                    <p className="text-foreground">
-                      Payé via{' '}
-                      {SUBSCRIPTION_PROVIDER_LABEL[subscription.provider] ?? subscription.provider}
-                    </p>
-                    {subscription.status === 'GRACE' && subscription.graceEndsAt ? (
-                      <p className="text-warning">
-                        Le renouvellement n&apos;a pas été détecté — repasse en Gratuit le{' '}
-                        {formatDate(subscription.graceEndsAt)} sauf renouvellement.
-                      </p>
-                    ) : subscription.cancelAtPeriodEnd ? (
-                      <p className="text-muted-foreground">
-                        Annulé — actif jusqu&apos;au {formatDate(subscription.currentPeriodEnd)},
-                        puis repasse en Gratuit.
-                      </p>
-                    ) : (
-                      <p className="text-muted-foreground">
-                        Prochain renouvellement le {formatDate(subscription.currentPeriodEnd)}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-2">
-                  {org.plan !== 'BUSINESS' && (
-                    <Button type="button" variant="accent" onClick={() => setUpgradeOpen(true)}>
-                      <Icon i="zap" size={14} />
-                      Passer à {org.plan === 'FREE' ? 'Pro ou Business' : 'Business'}
-                    </Button>
-                  )}
-                  {subscription &&
-                    (subscription.provider === 'MONEROO' || subscription.provider === 'CHARIOW') &&
-                    subscription.status === 'GRACE' && (
-                      <Button type="button" variant="outline" onClick={() => setUpgradeOpen(true)}>
-                        <Icon i="refresh-cw" size={14} />
-                        Renouveler maintenant
-                      </Button>
-                    )}
-                  {subscription && subscription.provider === 'STRIPE' && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={openBillingPortal}
-                      disabled={portalLoading}
-                    >
-                      <Icon i="credit-card" size={14} />
-                      {portalLoading ? 'Ouverture…' : 'Gérer mon abonnement'}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </FormSection>
-          )}
-
           {/* Rapport mensuel — Business only */}
           {organizationId && org && (
             <FormSection title="Rapport mensuel">
@@ -423,16 +262,145 @@ export default function SettingsPage() {
               </div>
             </FormSection>
           )}
+
+          {/* Plan — deliberately last (2026-08-19, per Banani re-selection):
+              was between Sécurité and Rapport mensuel, moved below Atelier
+              so the upgrade CTA doesn't sit in front of the account's core
+              settings while org data is still loading. */}
+          {organizationId && org && (
+            <>
+              {hasActiveOrGraceSubscription ? (
+                <FormSection title="Abonnement">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          (PLAN_INFO[org.plan] ?? PLAN_INFO.FREE)!.badge
+                        }`}
+                      >
+                        Plan {(PLAN_INFO[org.plan] ?? PLAN_INFO.FREE)!.label}
+                      </span>
+                      {subscription!.status === 'GRACE' && (
+                        <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-semibold text-warning">
+                          Paiement en retard
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {(PLAN_INFO[org.plan] ?? PLAN_INFO.FREE)!.blurb}
+                    </p>
+
+                    <div className="flex flex-col gap-1 rounded-md border border-border bg-input px-3 py-2.5 text-xs">
+                      <p className="text-foreground">
+                        Payé via{' '}
+                        {SUBSCRIPTION_PROVIDER_LABEL[subscription!.provider] ??
+                          subscription!.provider}
+                      </p>
+                      {subscription!.status === 'GRACE' && subscription!.graceEndsAt ? (
+                        <p className="text-warning">
+                          Le renouvellement n&apos;a pas été détecté — repasse en Gratuit le{' '}
+                          {formatDate(subscription!.graceEndsAt)} sauf renouvellement.
+                        </p>
+                      ) : subscription!.cancelAtPeriodEnd ? (
+                        <p className="text-muted-foreground">
+                          Annulé — actif jusqu&apos;au {formatDate(subscription!.currentPeriodEnd)},
+                          puis repasse en Gratuit.
+                        </p>
+                      ) : (
+                        <p className="text-muted-foreground">
+                          Prochain renouvellement le {formatDate(subscription!.currentPeriodEnd)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {org.plan !== 'BUSINESS' && (
+                        <Button type="button" variant="accent" onClick={() => setUpgradeOpen(true)}>
+                          <Icon i="zap" size={14} />
+                          Passer à Business
+                        </Button>
+                      )}
+                      {(subscription!.provider === 'MONEROO' ||
+                        subscription!.provider === 'CHARIOW') &&
+                        subscription!.status === 'GRACE' && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setUpgradeOpen(true)}
+                          >
+                            <Icon i="refresh-cw" size={14} />
+                            Renouveler maintenant
+                          </Button>
+                        )}
+                      {subscription!.provider === 'STRIPE' && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={openBillingPortal}
+                          disabled={portalLoading}
+                        >
+                          <Icon i="credit-card" size={14} />
+                          {portalLoading ? 'Ouverture…' : 'Gérer mon abonnement'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </FormSection>
+              ) : org.plan === 'FREE' ? (
+                <div className="bg-gradient-to-r from-primary to-primary/80 border border-primary rounded-lg p-6 lg:p-8 flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold font-headings text-primary-foreground">
+                      Passez à un forfait supérieur
+                    </h3>
+                    <p className="text-sm text-primary-foreground/80 mt-2">
+                      Accédez à toutes les fonctionnalités premium et développez votre atelier avec
+                      MekaSoft Pro ou Business.
+                    </p>
+                  </div>
+                  <Link
+                    href="/subscriptions/plans"
+                    className="w-full px-4 py-3 bg-primary-foreground text-primary rounded-md text-sm font-medium flex items-center gap-2 justify-center hover:bg-primary-foreground/90 transition-colors"
+                  >
+                    <Icon i="arrow-up-right" size={16} />
+                    Voir les forfaits
+                  </Link>
+                </div>
+              ) : (
+                // Plan attribué manuellement (pnpm db:set-org-plan / route
+                // admin) sans ligne Subscription réelle — pas de date/
+                // fournisseur à afficher, et la bannière "upgrade" serait
+                // trompeuse puisque le garage est déjà sur ce forfait.
+                <FormSection title="Abonnement">
+                  <div className="flex flex-col gap-4">
+                    <span
+                      className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${
+                        (PLAN_INFO[org.plan] ?? PLAN_INFO.FREE)!.badge
+                      }`}
+                    >
+                      Plan {(PLAN_INFO[org.plan] ?? PLAN_INFO.FREE)!.label}
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      Forfait attribué manuellement — aucun abonnement en ligne actif.
+                    </p>
+                    {org.plan !== 'BUSINESS' && (
+                      <Button
+                        type="button"
+                        variant="accent"
+                        className="self-start"
+                        onClick={() => setUpgradeOpen(true)}
+                      >
+                        <Icon i="zap" size={14} />
+                        Passer à Business
+                      </Button>
+                    )}
+                  </div>
+                </FormSection>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      <ManagerProfilePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        organizationId={organizationId}
-      />
-      <ChangePasswordModal open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
-      <EditProfileModal open={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
       <UpgradeSubscriptionModal
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}

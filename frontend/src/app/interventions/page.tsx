@@ -9,11 +9,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
-import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import { formatInterventionDate } from '@/lib/format-intervention-date';
 import Sidebar from '@/components/layout/Sidebar';
-import ManagerProfilePanel from '@/components/layout/ManagerProfilePanel';
 import InterventionRow, {
   type InterventionStatus,
 } from '@/components/interventions/InterventionRow';
@@ -51,8 +49,6 @@ function formatAmount(n: number): string {
 export default function InterventionsPage() {
   const user = useUser();
   const router = useRouter();
-  const { organizationId } = useCallerOrganization(!!user);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const [items, setItems] = useState<InterventionListItem[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({ total: 0 });
@@ -120,7 +116,7 @@ export default function InterventionsPage() {
 
   return (
     <div className="flex bg-background min-h-screen">
-      <Sidebar active="interventions" onProfileClick={() => setProfileOpen(true)} />
+      <Sidebar active="interventions" />
 
       <div className="flex flex-col flex-1 min-w-0">
         <PageHeader
@@ -243,12 +239,6 @@ export default function InterventionsPage() {
           </div>
         </div>
       </div>
-
-      <ManagerProfilePanel
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        organizationId={organizationId}
-      />
     </div>
   );
 }
