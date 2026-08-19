@@ -102,7 +102,7 @@ export default function ProfilePage() {
       <div className="flex-1 flex flex-col min-w-0">
         <PageHeader eyebrow="Mon compte" title="Mon profil" />
 
-        <div className="flex-1 w-full p-6 flex flex-col gap-6 max-w-2xl lg:mx-auto">
+        <div className="flex-1 w-full p-6 pb-28 flex flex-col gap-6 max-w-2xl lg:mx-auto">
           {/* Profile header */}
           <div className="flex flex-col items-center text-center">
             <UserAvatar
@@ -259,12 +259,22 @@ export default function ProfilePage() {
               </div>
             </FormSection>
           )}
+        </div>
+      </div>
 
-          {/* Déconnexion */}
+      {/* Déconnexion — fixed at the bottom of the viewport, always
+          reachable without scrolling through the whole page (the content
+          above can grow, e.g. a large team list). `lg:left-56` clears the
+          static Sidebar column (w-56); below `lg:` the Sidebar is off-canvas
+          so the bar spans the full width. The matching `pb-28` on the
+          scrollable content above keeps this from covering the last
+          section. */}
+      <div className="fixed bottom-0 left-0 right-0 lg:left-56 z-20 bg-background border-t border-border p-4 lg:px-6">
+        <div className="w-full max-w-2xl lg:mx-auto">
           <Button
             type="button"
             variant="outline"
-            className="justify-center"
+            className="w-full justify-center"
             onClick={() => setLogoutModalOpen(true)}
           >
             <Icon i="log-out" size={14} />
