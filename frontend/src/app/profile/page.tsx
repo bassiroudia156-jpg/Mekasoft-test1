@@ -79,13 +79,16 @@ const PLAN_INFO: Record<string, { label: string; blurb: string; badge: string }>
 // duplicated this page — all personal-account info now lives only here.
 //
 // 2026-08-19 (later same day): Atelier and Abonnement also moved here from
-// /settings, which is now a redirect stub — the Sidebar's "Paramètres"
-// button was renamed to "Export" and scoped down to just the reports/CSV
-// sections (see /export), leaving no nav destination for Atelier/Abonnement.
-// Rather than orphan them, they joined the one remaining full account page:
-// this one already owned "Ma team" (also org-level), and the two sections
-// were literally titled "Atelier & abonnement" as a pair on the old page, so
-// keeping them together here preserves that grouping.
+// /settings, which is now a redirect stub. The Sidebar's "Paramètres" nav
+// item went through a couple of shapes that day (briefly renamed "Export"
+// and pointed at a dedicated /export page, then that page's two sections —
+// Rapport mensuel, Export de données — moved again into ExportMenu inline
+// on /dashboard) before the nav item itself was removed for good, since
+// nothing was left for it to point at. Atelier/Abonnement joined this page
+// rather than staying orphaned: it already owned "Ma team" (also
+// org-level), and the two sections were literally titled "Atelier &
+// abonnement" as a pair on the old page, so keeping them together here
+// preserves that grouping.
 export default function ProfilePage() {
   const user = useUser();
   const { logout } = useAuth();

@@ -18,23 +18,20 @@ export type SidebarActiveKey =
   | 'vehicles'
   | 'invoices'
   | 'payments'
-  | 'settings'
   // Not a NAV_ITEMS entry (the account block below isn't part of that list)
-  // — exists purely so /profile can pass an honest value instead of lying
-  // with 'settings', which would wrongly highlight "Paramètres".
+  // — exists purely so /profile can pass an honest value instead of not
+  // highlighting anything.
   | 'profile';
 
 // Every item now has a real route. This was a plain `<a href="#">` through
 // Phases 1–5 (the sidebar never actually navigated), fixed while wiring
 // /invoices in Phase 6; "Paiements" was the last `href: null` holdout,
-// filled in Phase 7. "Paramètres" added in Phase 8.
-//
-// 2026-08-19: a short-lived "Export" rename of this item (Atelier/Abonnement
-// moved to /profile, this narrowed to just the reports/CSV surface) was
-// reverted along with that broader change — see ExportMenu on /dashboard
-// instead, which is where Export lives now, no nav entry needed for it.
-// "Paramètres" is back to pointing at the full /settings page in the
-// meantime.
+// filled in Phase 7. "Paramètres" (added Phase 8, briefly renamed "Export")
+// removed for good 2026-08-19 — Atelier/Abonnement live on /profile
+// (reachable via the account block below) and Export lives inline on
+// /dashboard (see ExportMenu), so there's nothing left for a dedicated nav
+// item to point at. /settings itself is now just a redirect stub to
+// /profile for old bookmarks/links — deliberately not in this list.
 const NAV_ITEMS: { id: SidebarActiveKey; icon: string; label: string; href: string }[] = [
   { id: 'dashboard', icon: 'layout-dashboard', label: 'Tableau de bord', href: '/dashboard' },
   { id: 'interventions', icon: 'wrench', label: 'Interventions', href: '/interventions' },
@@ -42,7 +39,6 @@ const NAV_ITEMS: { id: SidebarActiveKey; icon: string; label: string; href: stri
   { id: 'vehicles', icon: 'car', label: 'Véhicules', href: '/vehicles' },
   { id: 'invoices', icon: 'file-text', label: 'Factures', href: '/invoices' },
   { id: 'payments', icon: 'banknote', label: 'Paiements', href: '/payments' },
-  { id: 'settings', icon: 'settings', label: 'Paramètres', href: '/settings' },
 ];
 
 export interface SidebarProps {
