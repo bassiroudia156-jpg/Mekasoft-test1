@@ -13,7 +13,9 @@ export type OutboxEvent =
   | NotificationPaymentReceivedEvent
   | EmailPaymentConfirmationEvent
   | EmailVerificationCodeEvent
-  | EmailPasswordResetEvent;
+  | EmailPasswordResetEvent
+  | EmailTeamInviteEvent
+  | EmailInvoiceEvent;
 
 export interface NotificationPaymentReceivedEvent {
   kind: 'notification.payment_received';
@@ -58,6 +60,40 @@ export interface EmailPasswordResetEvent {
     to: string;
     code: string;
     expiresAt: string;
+  };
+}
+
+/**
+ * Phase 3 (Banani AddTeamMemberModal → TeamMemberInvitationSent) — emitted
+ * by POST /api/organizations/[id]/invite; consumed by the email-queue cron
+ * (renders via teamInviteEmail() in lib/server/organizations/email-templates).
+ */
+export interface EmailTeamInviteEvent {
+  kind: 'email.team_invite';
+  payload: {
+    to: string;
+    organizationName: string;
+    inviterEmail: string;
+    token: string;
+    expiresAt: string;
+  };
+}
+
+/**
+ * Phase 6 (Banani NewInvoice → InvoiceCreatedSuccess / InvoiceResendEmail
+ * → InvoiceEmailSent) — emitted by POST /api/invoices (auto-send on
+ * create) and POST /api/invoices/[id]/resend (manual resend, `to` may be
+ * an operator-edited address, `customMessage` from the resend modal).
+ * The dispatcher re-fetches the Invoice, renders the PDF attachment, and
+ * — once successfully enqueued to the mailer — stamps
+ * `emailSentAt`/`emailSentTo` on the row for the "Historique" timeline.
+ */
+export interface EmailInvoiceEvent {
+  kind: 'email.invoice';
+  payload: {
+    invoiceId: string;
+    to: string;
+    customMessage?: string;
   };
 }
 

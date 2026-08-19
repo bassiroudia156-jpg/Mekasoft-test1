@@ -80,6 +80,9 @@ export class EmailQueue extends JobQueue<EmailJobPayload> {
       html: string;
       status: string;
       text?: string;
+      attachmentFilename?: string;
+      attachmentContent?: string;
+      attachmentContentType?: string;
     } = {
       to: input.to,
       subject: input.subject,
@@ -87,6 +90,17 @@ export class EmailQueue extends JobQueue<EmailJobPayload> {
       status: 'PENDING',
     };
     if (input.text !== undefined) data.text = input.text;
+    // Single-attachment support (Phase 6) — enough for today's use case
+    // (one invoice PDF per email); a multi-attachment array can be added
+    // later without breaking this shape.
+    const attachment = input.attachments?.[0];
+    if (attachment) {
+      data.attachmentFilename = attachment.filename;
+      data.attachmentContent = attachment.content;
+      if (attachment.contentType !== undefined) {
+        data.attachmentContentType = attachment.contentType;
+      }
+    }
 
     const row = await this.prisma.emailJob.create({ data });
     await this.push({ emailJobId: row.id });
@@ -118,6 +132,17 @@ export class EmailQueue extends JobQueue<EmailJobPayload> {
           html: row.html,
         };
         if (row.text !== null) sendInput.text = row.text;
+        if (row.attachmentFilename !== null && row.attachmentContent !== null) {
+          sendInput.attachments = [
+            {
+              filename: row.attachmentFilename,
+              content: row.attachmentContent,
+              ...(row.attachmentContentType !== null
+                ? { contentType: row.attachmentContentType }
+                : {}),
+            },
+          ];
+        }
 
         await this.mailer.send(sendInput);
 

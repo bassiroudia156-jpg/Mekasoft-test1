@@ -9,6 +9,12 @@ import { COOKIE_PREFIX } from '@/lib/constants';
 export interface User {
   id: string;
   email: string;
+  /** Full display name, e.g. "Moussa Diallo". Null until set (OAuth prefill or EditProfileModal). */
+  name: string | null;
+  /** E.164 phone, editable via EditProfileModal / PATCH /api/auth/me. */
+  phone: string | null;
+  /** Real photo URL (OAuth prefill or user upload) — null falls back to initials everywhere. */
+  avatarUrl: string | null;
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -16,6 +22,12 @@ export interface User {
   hasPassword: boolean;
   /** Provider names already linked, e.g. ['google']. Empty for pure email/password accounts. */
   linkedProviders: string[];
+  /** Null while the caller has no organization yet (Phase 2's org-less state). */
+  organizationId: string | null;
+  /** OWNER | ADMIN | MEMBER — null alongside organizationId. */
+  orgRole: string | null;
+  /** Cosmetic job-title label (Gérant / Mécanicien / …) — display only, see TeamManagementModal. */
+  jobTitle: string | null;
 }
 
 interface AuthContextValue {

@@ -166,6 +166,105 @@ async function dispatchEvent(deps: OutboxDispatcherDeps, event: OutboxEvent): Pr
       await deps.emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html });
       return;
     }
+    case 'email.team_invite': {
+      // Phase 3 (Banani AddTeamMemberModal → TeamMemberInvitationSent) —
+      // emitted by POST /api/organizations/[id]/invite.
+      if (!deps.emailQueue) throw new Error('email queue not configured');
+      const { teamInviteEmail } = await import('../organizations/email-templates');
+      const { to, organizationName, inviterEmail, token, expiresAt } = event.payload;
+      const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+      const acceptUrl = `${appUrl}/invite/accept?token=${encodeURIComponent(token)}`;
+      const tpl = teamInviteEmail({ organizationName, inviterEmail, acceptUrl, expiresAt });
+      await deps.emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html });
+      return;
+    }
+    case 'email.invoice': {
+      // Phase 6 (Banani NewInvoice → InvoiceCreatedSuccess / InvoiceResendEmail
+      // → InvoiceEmailSent) — emitted by POST /api/invoices and
+      // POST /api/invoices/[id]/resend. Renders the PDF attachment here
+      // (not at emit time) to keep the OutboxEvent payload small, same
+      // "render in the dispatcher" precedent as the other email.* cases.
+      if (!deps.emailQueue) throw new Error('email queue not configured');
+      const { invoiceId, to, customMessage } = event.payload;
+
+      const invoice = await deps.prisma.invoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+          client: {
+            select: {
+              type: true,
+              firstName: true,
+              lastName: true,
+              companyName: true,
+              phone: true,
+              email: true,
+            },
+          },
+          organization: { select: { name: true, phone: true, city: true } },
+        },
+      });
+      if (!invoice) {
+        // Invoice was deleted after the event was enqueued — nothing to send.
+        return;
+      }
+
+      const clientName =
+        invoice.client.type === 'COMPANY'
+          ? (invoice.client.companyName ?? '')
+          : [invoice.client.firstName, invoice.client.lastName].filter(Boolean).join(' ');
+      const issueDateFmt = invoice.issueDate.toLocaleDateString('fr-FR');
+      const dueDateFmt = invoice.dueDate.toLocaleDateString('fr-FR');
+
+      const { renderInvoicePdf } = await import('../invoices/pdf');
+      const pdfBuffer = await renderInvoicePdf({
+        reference: invoice.reference,
+        issueDate: issueDateFmt,
+        dueDate: dueDateFmt,
+        paymentTerms: invoice.paymentTerms,
+        organizationName: invoice.organization.name,
+        organizationPhone: invoice.organization.phone,
+        organizationCity: invoice.organization.city,
+        clientName,
+        clientPhone: invoice.client.phone,
+        clientEmail: invoice.client.email,
+        description: invoice.description,
+        subtotal: invoice.subtotal,
+        taxRatePct: invoice.taxRatePct,
+        taxAmount: invoice.taxAmount,
+        amount: invoice.amount,
+      });
+
+      const { invoiceEmail } = await import('../invoices/email-templates');
+      const tpl = invoiceEmail({
+        clientName,
+        reference: invoice.reference,
+        amount: `${invoice.amount.toLocaleString('fr-FR')} FCFA`,
+        issueDate: issueDateFmt,
+        dueDate: dueDateFmt,
+        organizationName: invoice.organization.name,
+        ...(customMessage !== undefined ? { customMessage } : {}),
+      });
+
+      await deps.emailQueue.enqueue({
+        to,
+        subject: tpl.subject,
+        html: tpl.html,
+        text: tpl.text,
+        attachments: [
+          {
+            filename: `${invoice.reference}.pdf`,
+            content: pdfBuffer.toString('base64'),
+            contentType: 'application/pdf',
+          },
+        ],
+      });
+
+      await deps.prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { emailSentAt: new Date(), emailSentTo: to },
+      });
+      return;
+    }
     default: {
       // Exhaustive check — TS will yell if we add a new variant and forget it.
       const _exhaustive: never = event;

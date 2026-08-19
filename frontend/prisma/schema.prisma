@@ -19,10 +19,13 @@ model User {
   tokenVersion      Int       @default(0)
   withdrawalPinHash String? // bcrypt hash of withdrawal PIN; null = no PIN set
   // Optional display name — populated from OAuth profile on first sign-in.
-  // Email/password users can fill it later via /api/auth/me PATCH (future).
+  // Email/password users can fill it later via /api/auth/me PATCH (Phase 8).
   name              String?
-  // Optional avatar URL — populated from OAuth profile on first sign-in.
+  // Optional avatar URL — populated from OAuth profile on first sign-in, or
+  // set by the user via /api/upload + /api/auth/me PATCH (Phase 8).
   avatarUrl         String?
+  // E.164, editable via /api/auth/me PATCH (Phase 8's EditProfileModal).
+  phone             String?
   // App-wide role. USER is the default; ADMIN unlocks /admin back-office;
   // SUPERADMIN can promote/demote other admins. Bootstrap an initial
   // SUPERADMIN via `pnpm db:make-superadmin <email>` (see scripts).
@@ -46,8 +49,9 @@ model User {
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
   // on their domain models.
-  ownedOrganizations Organization[]      @relation("OrgOwner")
+  ownedOrganizations Organization[]       @relation("OrgOwner")
   memberships        OrganizationMember[] @relation("OrgMembership")
+  invitesSent        OrganizationInvite[] @relation("InviteSender")
 
   @@index([email])
   @@index([role])
@@ -95,12 +99,49 @@ model AdminAction {
 // used as a stable URL segment.
 // ───────────────────────────────────────────────────────────────────────
 model Organization {
-  id        String   @id @default(cuid())
-  slug      String   @unique
-  name      String
-  ownerId   String
-  owner     User     @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members   OrganizationMember[]
+  id                   String                @id @default(cuid())
+  slug                 String                @unique
+  name                 String
+  ownerId              String
+  owner                User                  @relation("OrgOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members              OrganizationMember[]
+  invites              OrganizationInvite[]
+  clients              Client[]
+  vehicles             Vehicle[]
+  interventions        Intervention[]
+  invoices             Invoice[]
+  payments             Payment[]
+  subscription         Subscription?
+  subscriptionPayments SubscriptionPayment[]
+
+  // MekaSoft onboarding fields (Banani OnboardingStep2/Step3) — captured
+  // once at org-creation time, editable later from Settings (Phase 8).
+  phone        String? // E.164, e.g. +221771234567
+  city         String?
+  teamSizeHint String? // SOLO | SMALL | MEDIUM | LARGE — analytics signal from onboarding step 3, not a hard limit
+
+  // Freemium plan (2026-08-18) — FREE | PRO | BUSINESS, see
+  // lib/server/plans/limits.ts for the actual limits/features per plan.
+  // Manually set by a SUPERADMIN for now (POST /api/admin/organizations/
+  // [id]/plan) — no payment collection wired yet, that's the next phase.
+  plan          String    @default("FREE")
+  planUpdatedAt DateTime?
+  // Garage logo shown on invoice PDFs — Pro+ only (gated in the PDF
+  // renderer regardless of whether a FREE-plan org somehow has one set).
+  logoUrl       String?
+
+  // Shop-identity fields (Banani EditShopSettingsPage, Phase 8) — editable
+  // via PATCH /api/organizations, requireCallerOrg('ADMIN').
+  street        String? // matches Client.street naming
+  postalCode    String?
+  country       String? @default("Sénégal") // matches Client.country default
+  taxId         String? // "Numéro SIRET" — matches Client's Company taxId naming
+  siren         String? // "Numéro SIREN"
+  contactEmail  String? // shop's own contact email, distinct from the owner's login email
+  hoursWeekday  String? @default("07h00 - 18h00")
+  hoursSaturday String? @default("08h00 - 14h00")
+  hoursSunday   String? @default("Fermé")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -116,11 +157,44 @@ model OrganizationMember {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String
   user           User         @relation("OrgMembership", fields: [userId], references: [id], onDelete: Cascade)
-  role           String       @default("MEMBER") // OWNER | ADMIN | MEMBER
+  role           String       @default("MEMBER") // OWNER | ADMIN | MEMBER — permission level, gates requireOrgRole()
+  // Cosmetic job-title label from Banani's TeamManagementModal (Gérant /
+  // Administrateur / Mécanicien / Comptable / …) — display only, never
+  // read by the access-control layer. Kept separate from `role` because
+  // require-org-role.ts's ORG_ROLE_RANK only knows OWNER/ADMIN/MEMBER.
+  jobTitle       String?
   createdAt      DateTime     @default(now())
 
   @@unique([organizationId, userId])
   @@index([userId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Team invitations (Banani AddTeamMemberModal → TeamMemberInvitationSent).
+// The invitee usually has no User row yet — accepting an invite creates
+// one (email pre-verified: the invite link itself proves ownership, same
+// trust model as the email-verification code). V1 assumes single-org-per-
+// user, so an invite to an email that already owns a User account is
+// rejected at send time rather than handled at accept time.
+// ───────────────────────────────────────────────────────────────────────
+model OrganizationInvite {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  name           String
+  role           String // OWNER | ADMIN | MEMBER — granted to the OrganizationMember row on accept
+  jobTitle       String // Administrateur | Mécanicien | Comptable | … — see OrganizationMember.jobTitle
+  token          String       @unique
+  status         String       @default("PENDING") // PENDING | ACCEPTED | CANCELLED | EXPIRED
+  invitedById    String
+  invitedBy      User         @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Restrict)
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, status])
+  @@index([email])
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -194,6 +268,13 @@ model EmailJob {
   scheduledAt DateTime  @default(now())
   sentAt      DateTime?
   createdAt   DateTime  @default(now())
+
+  // Single-attachment support (Phase 6 — invoice PDFs). Base64 content,
+  // nullable — every prior email sender (verification/reset/invite) never
+  // sets these, so existing rows/behavior are unaffected.
+  attachmentFilename    String?
+  attachmentContent     String? @db.Text
+  attachmentContentType String?
 
   @@index([status, scheduledAt])
 }
@@ -273,21 +354,21 @@ model WebhookLog {
 // at the call site — the schema is currency-agnostic.
 // ───────────────────────────────────────────────────────────────────────
 model Order {
-  id              String    @id @default(cuid())
-  userId          String? // nullable — guest checkout supported
-  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  amount          Int // gross amount, smallest unit
-  currency        String    @default("XOF") // ISO 4217
-  status          String    @default("PENDING") // PENDING | PAID | EXPIRED | FAILED | REFUNDED
-  customerEmail   String?
-  customerPhone   String?
-  customerName    String?
-  metadata        Json? // app-specific fields
+  id            String  @id @default(cuid())
+  userId        String? // nullable — guest checkout supported
+  user          User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  amount        Int // gross amount, smallest unit
+  currency      String  @default("XOF") // ISO 4217
+  status        String  @default("PENDING") // PENDING | PAID | EXPIRED | FAILED | REFUNDED
+  customerEmail String?
+  customerPhone String?
+  customerName  String?
+  metadata      Json? // app-specific fields
 
   // Stripe-grade idempotency. Required header on POST /api/orders; replay
   // with same value returns the original Order row instead of double-charging.
   // Nullable so existing rows pre-migration don't break the @unique constraint.
-  idempotencyKey  String?   @unique
+  idempotencyKey String? @unique
 
   // Provider reference
   provider         String // e.g. "bictorys"
@@ -311,12 +392,12 @@ model Order {
 }
 
 model Withdrawal {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user        User   @relation(fields: [userId], references: [id], onDelete: Restrict)
   amount      Int // requested amount, smallest unit
-  currency    String   @default("XOF")
-  status      String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED
+  currency    String @default("XOF")
+  status      String @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED
   destination Json // { method: "WAVE" | "ORANGE_MONEY" | ..., phone: "+221...", accountName?: "..." }
 
   // Provider reference
@@ -331,4 +412,358 @@ model Withdrawal {
   @@index([userId, requestedAt])
   @@index([status, requestedAt])
   @@index([provider, providerPayoutId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Phase 4 — Clients & Vehicles (Banani ClientsList / AddNewClient /
+// ClientProfile / VehiclesList / AddVehicle / DeleteVehicleConfirmation).
+//
+// A Client is either an INDIVIDUAL or a COMPANY (Banani's "Particulier" /
+// "Entreprise" toggle on AddNewClient) — one model, type-discriminated
+// fields, not two separate models. Display name is computed at the API
+// layer (firstName+lastName for individuals, companyName for companies),
+// not denormalized, so there is one source of truth.
+// ───────────────────────────────────────────────────────────────────────
+model Client {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  type           String // INDIVIDUAL | COMPANY
+  status         String       @default("actif") // actif | inactif — matches ClientRow's lowercase status literal
+
+  // Individual-only fields (Banani AddNewIndividualClient)
+  firstName   String?
+  lastName    String?
+  profession  String?
+  dateOfBirth DateTime?
+  gender      String?
+  idNumber    String?
+
+  // Company-only fields (Banani AddNewClient_next1 "Add New Company")
+  companyName  String?
+  taxId        String? // SIRET / N° fiscal
+  sector       String?
+  contactName  String?
+  contactRole  String?
+  contactPhone String?
+  contactEmail String?
+
+  // Shared contact + address
+  phone      String
+  email      String?
+  street     String? // "Quartier/Rue"
+  city       String?
+  postalCode String?
+  country    String? @default("Sénégal")
+  notes      String?
+
+  vehicles      Vehicle[]
+  interventions Intervention[]
+  invoices      Invoice[]
+  payments      Payment[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+}
+
+model Vehicle {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // Banani "Propriétaire du véhicule: Client lui-même / Entreprise cliente"
+  // — whether the vehicle is personal or company property. Independent of
+  // Client.type (a COMPANY client's contact can still register a personal
+  // vehicle, and vice versa).
+  ownerType      String       @default("INDIVIDUAL") // INDIVIDUAL | COMPANY
+
+  brand         String
+  model         String
+  year          Int?
+  registration  String
+  mileage       Int? // km
+  fuelType      String?
+  vin           String? // N° de série
+  engineNumber  String?
+  color         String?
+  status        String    @default("Actif") // Actif | Inactif — matches VehicleRow's capitalized status literal
+  lastServiceAt DateTime? // set once Interventions ship (Phase 5); null renders "—"
+  notes         String?
+
+  interventions Intervention[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([organizationId, registration])
+  @@index([organizationId, status])
+  @@index([clientId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Interventions & Parts (Banani NewIntervention / InterventionsList /
+// InterventionDetailsView / AddParts). An Intervention is a repair job
+// (dossier de réparation) tied to one client + one vehicle. `status` is a
+// single 4-value field matching InterventionRow's own prop shape exactly
+// (En cours/Terminé/En attente/Non payé) — committed in
+// IMPLEMENTATION-PLAN.md's domain model before Phase 0 started, not a
+// Phase 5 fork. Client/Vehicle FKs are Restrict (not Cascade) — deleting a
+// client/vehicle with intervention history must fail loudly, not silently
+// orphan billing data (the DELETE /api/vehicles/[id] comment from Phase 4
+// already flagged this as a "revisit once Intervention exists").
+// ───────────────────────────────────────────────────────────────────────
+model Intervention {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reference      String // INT-### sequential per organization
+
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  work     String // description of work to perform
+  category String?
+  priority String  @default("Normal") // Normal | Urgente
+  notes    String?
+
+  // Money — integer FCFA, no decimals (CLAUDE.md invariant). `amount` is
+  // the denormalized TTC total (labor + parts + tax), recomputed by
+  // lib/server/interventions/totals.ts on every create/parts mutation so
+  // InterventionRow's list display never needs to recompute tax logic.
+  laborAmount Int @default(0)
+  partsAmount Int @default(0)
+  taxRatePct  Int @default(18)
+  amount      Int @default(0)
+
+  status String @default("En cours") // En cours | Terminé | En attente | Non payé
+
+  parts     Part[]
+  invoice   Invoice? // one invoice per intervention (see Invoice.interventionId unique)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([clientId])
+  @@index([vehicleId])
+}
+
+model Part {
+  id             String       @id @default(cuid())
+  interventionId String
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+
+  reference String?
+  name      String
+  supplier  String?
+  quantity  Int     @default(1)
+  unit      String  @default("pcs")
+  unitPrice Int // FCFA
+  total     Int // FCFA, quantity * unitPrice, denormalized
+  inStock   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([interventionId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Invoices (Banani NewInvoice / InvoicesList / InvoiceDetailsFromEmail).
+// Generated FROM an intervention — one invoice per intervention
+// (`interventionId` unique). `description`/`subtotal`/`taxAmount`/`amount`
+// are a snapshot taken at issue time, not a live join: an invoice must not
+// silently change if the underlying intervention is edited afterward.
+// `status` is manually set (same "Marquer comme payé" convenience-action
+// pattern as Intervention) — no automatic overdue detection.
+// ───────────────────────────────────────────────────────────────────────
+model Invoice {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reference      String // FAC-YYYY-### sequential per organization per calendar year
+
+  interventionId String       @unique
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Restrict)
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  description String // snapshot of intervention.work
+  subtotal    Int // FCFA HT
+  taxRatePct  Int    @default(18)
+  taxAmount   Int
+  amount      Int // FCFA TTC
+
+  paymentTerms String   @default("Net 30 jours")
+  issueDate    DateTime @default(now())
+  dueDate      DateTime
+  status       String   @default("Émise") // Émise | Payée | En attente
+  notes        String?
+
+  // Set by the outbox dispatcher once the email is actually enqueued to the
+  // mailer (not at emit time) — drives the "Historique" timeline.
+  emailSentAt DateTime?
+  emailSentTo String?
+
+  payments  Payment[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([clientId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Payments (Banani PaymentsManagement / RegisterPayment / PaymentRegistered
+// Confirmation) — a manual back-office ledger entry a garage staffer
+// records after receiving money for an Invoice. NOT the same concept as
+// `lib/server/payments/`'s `PaymentProvider` (the Bictorys online-charge
+// gateway, protected file) — this model has no gateway, no webhook, no
+// circuit breaker; helpers live in `lib/server/payment-ledger/` to keep
+// the two concerns from blurring together. One form, `method`
+// discriminated union (Espèces/Virement bancaire/Mobile Money/Chèque);
+// `amount` always mirrors `invoice.amount` — no partial payments were
+// designed anywhere in the 109 screens. Registering a payment marks the
+// invoice `Payée` regardless of the payment's own `status` (see
+// phase-7-payments.md decision #2 for the documented tension this
+// creates with a pending bank transfer/uncashed cheque).
+// ───────────────────────────────────────────────────────────────────────
+model Payment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reference      String // PAY-YYYY-### sequential per organization per calendar year
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  amount      Int // FCFA — snapshot of invoice.amount at registration time
+  method      String // Espèces | Virement bancaire | Mobile Money | Chèque
+  status      String   @default("Payé") // Payé | En attente — derived at creation, immutable after
+  paymentDate DateTime @default(now())
+  notes       String?
+
+  generateReceipt  Boolean @default(true)
+  receiptReference String? // REC-{invoice year}-{invoice seq}-PAY-{payment seq}
+
+  // Virement bancaire
+  bankName          String?
+  bankAccountLast4  String?
+  transferReference String?
+  payerName         String?
+
+  // Mobile Money
+  mobileProvider  String? // Orange Money | Wave | Free Money
+  mobilePhone     String?
+  mobileReference String?
+
+  // Chèque
+  chequeNumber  String?
+  chequeBank    String?
+  chequeHolder  String?
+  chequeDueDate DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+  @@index([organizationId, paymentDate])
+  @@index([invoiceId])
+  @@index([clientId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// SaaS subscription billing (2026-08-18) — a garage (Organization) paying
+// MekaSoft for its own PRO/BUSINESS plan. Deliberately NOT the same domain
+// as `Payment` above (a garage's CLIENT paying the garage for a repair) —
+// different actor, different money flow, different provider set. Kept in
+// its own model pair rather than reusing the generic `Order` scaffold
+// (frontend/src/app/api/orders/route.ts) because Order is user-scoped and
+// hardwired to a single Bictorys provider-singleton; a subscription is
+// org-scoped and needs 3 concurrent providers (Stripe/Moneroo/Chariow).
+// See lib/server/subscriptions/.
+//
+// One Subscription row per Organization (upserted in place — no history of
+// past plans here; SubscriptionPayment is the append-only ledger for that).
+// `provider = STRIPE` renews automatically (card, Stripe-hosted recurring
+// billing) so `graceEndsAt` stays null. `provider = MONEROO | CHARIOW` is a
+// one-shot mobile-money checkout with no push-renewal capability — the
+// relance cron (lib/server/subscriptions/reminders.ts) emails/WhatsApps the
+// org before `currentPeriodEnd`, and a `graceEndsAt` (currentPeriodEnd +
+// SUBSCRIPTION_GRACE_DAYS) gives a few extra days before the downgrade cron
+// (lib/server/subscriptions/downgrade.ts) reverts Organization.plan to FREE.
+// ───────────────────────────────────────────────────────────────────────
+model Subscription {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  plan     String // PRO | BUSINESS — the plan this subscription pays for (never FREE)
+  provider String // STRIPE | MONEROO | CHARIOW
+  status   String @default("ACTIVE") // ACTIVE | GRACE | EXPIRED | CANCELED
+
+  // Paid-through date. For STRIPE this tracks the current Stripe billing
+  // period end (advanced by invoice.paid); for MONEROO/CHARIOW it's simply
+  // "checkout date + 1 month", advanced only by a fresh manual checkout.
+  currentPeriodEnd  DateTime
+  // Set only for MONEROO/CHARIOW rows (currentPeriodEnd + grace days). Null
+  // for STRIPE — a card subscription either renews or Stripe itself marks
+  // it past_due/canceled, no separate app-level grace needed.
+  graceEndsAt       DateTime?
+  // STRIPE only — true once the user cancels from the Customer Portal;
+  // the subscription still runs until currentPeriodEnd, then downgrade.ts
+  // reverts to FREE instead of expecting a renewal invoice.
+  cancelAtPeriodEnd Boolean   @default(false)
+
+  // Stripe-specific refs (null for MONEROO/CHARIOW rows).
+  stripeCustomerId     String?
+  stripeSubscriptionId String? @unique
+
+  // Relance bookkeeping — prevents double-sending the same reminder tier
+  // (see SUBSCRIPTION_REMINDER_DAYS_BEFORE) across overlapping cron ticks.
+  remindersSent      Int       @default(0)
+  lastReminderSentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, currentPeriodEnd])
+  @@index([provider])
+}
+
+// Append-only ledger — one row per checkout attempt/renewal, regardless of
+// provider. Powers idempotent webhook fulfilment (`@@unique([provider,
+// providerRef])`, same pattern as WebhookLog's dedup key) and a future
+// "billing history" UI.
+model SubscriptionPayment {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  plan        String // PRO | BUSINESS
+  provider    String // STRIPE | MONEROO | CHARIOW
+  // Stripe: checkout.session.id (then invoice.id for renewals). Moneroo:
+  // payment id. Chariow: purchase.id (sale id, per Chariow.md §3.1).
+  providerRef String
+
+  amount   Int // FCFA, integer smallest unit — matches Payment.amount convention
+  currency String @default("XOF")
+  status   String @default("PENDING") // PENDING | SUCCEEDED | FAILED
+
+  checkoutUrl String? // hosted checkout page handed back to the client
+
+  createdAt   DateTime  @default(now())
+  succeededAt DateTime?
+
+  @@unique([provider, providerRef])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
 }

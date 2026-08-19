@@ -1,19 +1,24 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { IBM_Plex_Sans } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { MobileSidebarProvider } from '@/contexts/MobileSidebarContext';
 
-const inter = Inter({
+// MekaSoft brand font (Banani design tokens specify IBM Plex Sans for both
+// --font-body and --font-headings — see globals.css). Not a variable font in
+// next/font/google, so explicit weights are required.
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
-  variable: '--font-inter',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-ibm-plex-sans',
   display: 'swap',
 });
 
-// Replace these with your app name + description per fork.
 export const metadata: Metadata = {
-  title: 'izi kit',
-  description: 'Headless Next.js 16 starter — auth, payments, admin, webhooks, cron.',
+  title: 'MekaSoft',
+  description:
+    "Gestion d'atelier automobile — clients, véhicules, interventions, factures, paiements.",
 };
 
 export default function RootLayout({
@@ -22,10 +27,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className={inter.className}>
+    <html lang="fr" className={ibmPlexSans.variable}>
+      <body className={ibmPlexSans.className}>
         <ToastProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <MobileSidebarProvider>{children}</MobileSidebarProvider>
+          </AuthProvider>
         </ToastProvider>
       </body>
     </html>

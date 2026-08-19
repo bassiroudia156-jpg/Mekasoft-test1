@@ -15,13 +15,26 @@
 // "Change password". `linkedProviders` is a string[] of provider names
 // already wired (e.g. ['google']).
 //
-// No CSRF: GET is a safe method; verifyCsrf is a no-op for GET anyway.
+// Phase 8: also selects the caller's first `OrganizationMember` row
+// (organizationId/orgRole/jobTitle) in the SAME query, and returns
+// name/phone/avatarUrl. This is the single source of truth `AuthContext`
+// fetches once per session — `Sidebar` and `ManagerProfilePanel` read
+// identity + role label from here instead of each doing their own fetch.
+//
+// PATCH /api/auth/me — update the caller's own profile fields. Three
+// independent optional inputs (name, phone, avatarUrl) so EditProfileModal's
+// "save changes" and the avatar upload/remove flow can share one endpoint.
+// At least one field is required. Returns { ok: true } — callers re-fetch
+// via AuthContext's refresh() (same convention as change-password/set-password).
 export const runtime = 'nodejs';
 
 import 'server-only';
+import { z } from 'zod';
 import { NextResponse, type NextRequest } from 'next/server';
+import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
+import { zPhone } from '@/lib/server/zod-helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -41,13 +54,23 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       select: {
         id: true,
         email: true,
+        name: true,
+        phone: true,
+        avatarUrl: true,
         emailVerifiedAt: true,
         createdAt: true,
         updatedAt: true,
         passwordHash: true,
         oauthAccounts: { select: { provider: true } },
+        memberships: {
+          select: { organizationId: true, role: true, jobTitle: true },
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+        },
       },
     });
+
+    const membership = dbUser?.memberships?.[0] ?? null;
 
     const user = {
       // Keep `sub` for back-compat with the AuthContext payload contract
@@ -55,6 +78,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       sub: auth.user.sub,
       id: dbUser?.id ?? auth.user.sub,
       email: dbUser?.email ?? auth.user.email,
+      name: dbUser?.name ?? null,
+      phone: dbUser?.phone ?? null,
+      avatarUrl: dbUser?.avatarUrl ?? null,
       emailVerifiedAt: dbUser?.emailVerifiedAt
         ? dbUser.emailVerifiedAt instanceof Date
           ? dbUser.emailVerifiedAt.toISOString()
@@ -72,8 +98,62 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         : null,
       hasPassword: !!dbUser?.passwordHash,
       linkedProviders: (dbUser?.oauthAccounts ?? []).map((a) => a.provider),
+      organizationId: membership?.organizationId ?? null,
+      orgRole: membership?.role ?? null,
+      jobTitle: membership?.jobTitle ?? null,
     };
 
     return NextResponse.json({ user }, { status: 200, headers: { 'x-request-id': ctx.requestId } });
+  });
+}
+
+const PatchBody = z
+  .object({
+    name: z.string().trim().min(1, 'Name too short').max(120).optional(),
+    phone: zPhone.nullable().optional(),
+    avatarUrl: z.string().url().nullable().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.phone !== undefined || v.avatarUrl !== undefined, {
+    message: 'At least one field is required',
+  });
+
+export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    const csrfFail = verifyCsrf(req);
+    if (csrfFail) {
+      csrfFail.headers.set('x-request-id', ctx.requestId);
+      return csrfFail;
+    }
+
+    const auth = await requireAuth(req.headers.get('authorization'));
+    if (auth instanceof NextResponse) {
+      auth.headers.set('x-request-id', ctx.requestId);
+      return auth;
+    }
+
+    const json = await req.json().catch(() => null);
+    const parsed = PatchBody.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'INVALID_BODY', issues: parsed.error.issues },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    const { name, phone, avatarUrl } = parsed.data;
+
+    await prisma.user.update({
+      where: { id: auth.user.sub },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(phone !== undefined ? { phone } : {}),
+        ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+      },
+    });
+
+    return NextResponse.json(
+      { ok: true },
+      { status: 200, headers: { 'x-request-id': ctx.requestId } },
+    );
   });
 }
