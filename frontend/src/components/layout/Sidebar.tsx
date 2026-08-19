@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
-import BrandIcon from '@/components/ui/BrandIcon';
+import BrandLogo from '@/components/ui/BrandLogo';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMobileSidebar } from '@/contexts/MobileSidebarContext';
@@ -70,16 +70,15 @@ export default function Sidebar({ active, onProfileClick }: SidebarProps) {
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Logo */}
+        {/* Logo — dark variant because its SVG card background (#152A4E)
+            matches --color-primary exactly, so it sits flush on this rail
+            with no visible box edge (see AuthBrandPanel for the same
+            reasoning; was a hand-built BrandIcon + <span>MekaSoft</span>
+            before 2026-08-19, which diverged from the real logo asset). */}
         <div className="px-5 py-5 border-b border-primary-foreground/10 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BrandIcon size={32} className="rounded-sm shrink-0" />
-            <div>
-              <div className="text-primary-foreground font-headings font-bold text-base leading-tight">
-                MekaSoft
-              </div>
-              <div className="text-primary-foreground/50 text-xs">v2.1</div>
-            </div>
+          <div>
+            <BrandLogo variant="dark" className="h-7 w-auto" />
+            <div className="text-primary-foreground/50 text-[10px] mt-1">v2.1</div>
           </div>
           <button
             type="button"

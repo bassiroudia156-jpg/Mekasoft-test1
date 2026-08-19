@@ -1,4 +1,4 @@
-import BrandIcon from '@/components/ui/BrandIcon';
+import BrandLogo from '@/components/ui/BrandLogo';
 import clsx from 'clsx';
 
 export interface OnboardingLogoProps {
@@ -7,17 +7,16 @@ export interface OnboardingLogoProps {
 }
 
 // Repeats across all 4 onboarding steps (Banani sizes it slightly larger on
-// step 1: w-10/icon-20/text-xl vs w-9/icon-18/text-lg elsewhere).
+// step 1). "light" variant because this renders on bg-background (light).
+// Was a hand-built BrandIcon + <span>MekaSoft</span> before 2026-08-19,
+// which diverged from the real logo asset (see AuthBrandPanel/Sidebar for
+// the same fix, same reasoning).
 export default function OnboardingLogo({ size = 'sm', className }: OnboardingLogoProps) {
-  const iconSize = size === 'lg' ? 40 : 36;
-  const text = size === 'lg' ? 'text-xl' : 'text-lg';
+  const height = size === 'lg' ? 'h-10' : 'h-9';
 
   return (
-    <div className={clsx('flex items-center gap-3', className)}>
-      <BrandIcon size={iconSize} className="rounded-md shrink-0" />
-      <span className={clsx('font-headings font-bold text-foreground tracking-tight', text)}>
-        MekaSoft
-      </span>
+    <div className={clsx(className)}>
+      <BrandLogo variant="light" className={clsx(height, 'w-auto')} />
     </div>
   );
 }

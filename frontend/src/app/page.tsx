@@ -662,14 +662,14 @@ export default function LandingPage() {
       <footer className="px-4 py-8 lg:px-12 lg:py-12 bg-foreground border-t border-border/20">
         <div className="w-full lg:max-w-5xl lg:mx-auto">
           <div className="lg:hidden mb-6">
-            <BrandLogo variant="dark" className="h-7 w-auto mb-2" />
+            <BrandLogo variant="dark" className="h-9 w-auto mb-2" />
             <p className="text-xs text-background/50 leading-relaxed">
               Logiciel de gestion pour garages.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-6 mb-6 lg:grid-cols-4 lg:gap-8 lg:mb-10">
             <div className="hidden lg:block col-span-1">
-              <BrandLogo variant="dark" className="h-8 w-auto mb-3" />
+              <BrandLogo variant="dark" className="h-10 w-auto mb-3" />
               <p className="text-xs text-background/50 leading-relaxed">
                 Logiciel de gestion pour garages.
               </p>
