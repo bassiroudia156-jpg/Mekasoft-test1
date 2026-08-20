@@ -340,7 +340,7 @@ export default function DashboardPage() {
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar
           onNewIntervention={() => router.push('/interventions/new')}
-          showUpgrade={!!organizationId && !!orgPlan && orgPlan !== 'BUSINESS'}
+          showUpgrade={!!organizationId && orgPlan === 'FREE'}
           rightSlot={<ExportMenu plan={orgPlan} />}
         />
 

@@ -1,4 +1,6 @@
-// GET /api/reports/monthly/pdf — Business-plan monthly activity report.
+// GET /api/reports/monthly/pdf — Premium-plan monthly activity report
+// (2026-08-20: was Business-only, merged into PRO/"Premium" — see
+// lib/server/plans/limits.ts's header comment).
 // ?month=YYYY-MM to fetch a past month (defaults to the current one).
 export const runtime = 'nodejs';
 
@@ -49,7 +51,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         {
           error: 'PLAN_FEATURE_LOCKED',
-          message: 'Le rapport mensuel est réservé au plan Business.',
+          message: 'Le rapport mensuel est réservé au plan Premium.',
         },
         { status: 403, headers: { 'x-request-id': ctx.requestId } },
       );

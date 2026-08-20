@@ -52,6 +52,9 @@ function formatDate(iso: string): string {
 // Mirrors lib/server/plans/limits.ts's PLAN_PRICING/PLAN_LIMITS — same
 // local-copy convention as the landing page (that module lives under
 // lib/server/, this is client-rendered display copy).
+// 2026-08-20: BUSINESS retired — its blurb (5 users, roles, reports,
+// export) merged into PRO's, displayed as "Premium" (label only; internal
+// identifier stayed 'PRO', see lib/server/plans/limits.ts's header comment).
 const PLAN_INFO: Record<string, { label: string; blurb: string; badge: string }> = {
   FREE: {
     label: 'Gratuit',
@@ -59,14 +62,10 @@ const PLAN_INFO: Record<string, { label: string; blurb: string; badge: string }>
     badge: 'bg-muted text-muted-foreground',
   },
   PRO: {
-    label: 'Pro',
-    blurb: 'Illimité + partage WhatsApp + logo sur les factures.',
+    label: 'Premium',
+    blurb:
+      "Illimité + partage WhatsApp + logo sur les factures + jusqu'à 5 utilisateurs, rôles, rapport mensuel, export.",
     badge: 'bg-primary/10 text-primary',
-  },
-  BUSINESS: {
-    label: 'Business',
-    blurb: "Tout Pro + jusqu'à 5 utilisateurs, rôles, rapports, export.",
-    badge: 'bg-accent/10 text-accent',
   },
 };
 
@@ -467,12 +466,10 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {orgPlan !== 'BUSINESS' && (
-                        <Button type="button" variant="accent" onClick={() => setUpgradeOpen(true)}>
-                          <Icon i="zap" size={14} />
-                          Passer à Business
-                        </Button>
-                      )}
+                      {/* No upgrade button here (2026-08-20) — Premium is
+                          the only paid plan now, and reaching this branch
+                          means the org already has an active subscription
+                          to it. */}
                       {(subscription!.provider === 'MONEROO' ||
                         subscription!.provider === 'CHARIOW') &&
                         subscription!.status === 'GRACE' && (
@@ -507,7 +504,7 @@ export default function ProfilePage() {
                     </h3>
                     <p className="text-sm text-primary-foreground/80 mt-2">
                       Accédez à toutes les fonctionnalités premium et développez votre atelier avec
-                      MekaSoft Pro ou Business.
+                      MekaSoft Premium.
                     </p>
                   </div>
                   <Link
@@ -535,17 +532,10 @@ export default function ProfilePage() {
                     <p className="text-xs text-muted-foreground">
                       Forfait attribué manuellement — aucun abonnement en ligne actif.
                     </p>
-                    {orgPlan !== 'BUSINESS' && (
-                      <Button
-                        type="button"
-                        variant="accent"
-                        className="self-start"
-                        onClick={() => setUpgradeOpen(true)}
-                      >
-                        <Icon i="zap" size={14} />
-                        Passer à Business
-                      </Button>
-                    )}
+                    {/* No upgrade button here either (2026-08-20) — same
+                        reasoning as the active-subscription branch above:
+                        Premium is the only paid plan, and this branch only
+                        renders for orgs already on it (manually granted). */}
                   </div>
                 </FormSection>
               )}
@@ -597,7 +587,6 @@ export default function ProfilePage() {
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
         availableProviders={availableProviders}
-        defaultPlan={orgPlan === 'FREE' ? 'PRO' : 'BUSINESS'}
       />
     </div>
   );

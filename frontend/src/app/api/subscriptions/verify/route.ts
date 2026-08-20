@@ -78,9 +78,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
     if (!isPayablePlan(payment.plan)) {
-      // Defensive — SubscriptionPayment.plan is only ever written as PRO/
-      // BUSINESS by the checkout route, but the column itself is a plain
-      // String (no DB-level enum), so guard before it reaches activation.
+      // Defensive — SubscriptionPayment.plan is only ever written as PRO
+      // by the checkout route (BUSINESS retired 2026-08-20 — see
+      // lib/server/plans/limits.ts's header comment), but the column
+      // itself is a plain String (no DB-level enum), so guard before it
+      // reaches activation — this also catches a stale legacy BUSINESS row.
       return NextResponse.json(
         { error: 'INVALID_PLAN' },
         { status: 500, headers: { 'x-request-id': ctx.requestId } },

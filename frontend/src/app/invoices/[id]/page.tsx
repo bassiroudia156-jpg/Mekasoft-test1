@@ -75,7 +75,9 @@ export default function InvoiceDetailPage() {
   const { toggle } = useMobileSidebar();
   const params = useParams<{ id: string }>();
   const { plan } = useCallerOrganization(!!user);
-  const canShareWhatsapp = plan === 'PRO' || plan === 'BUSINESS';
+  // Single paid plan now (2026-08-20, BUSINESS retired — see
+  // lib/server/plans/limits.ts's header comment).
+  const canShareWhatsapp = plan === 'PRO';
 
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -202,9 +204,7 @@ export default function InvoiceDetailPage() {
               ) : (
                 <button
                   type="button"
-                  onClick={() =>
-                    toast('Le partage WhatsApp est réservé aux plans Pro et Business.', 'info')
-                  }
+                  onClick={() => toast('Le partage WhatsApp est réservé au plan Premium.', 'info')}
                   className="text-muted-foreground text-sm font-medium flex items-center gap-1"
                 >
                   <Icon i="lock" size={14} />

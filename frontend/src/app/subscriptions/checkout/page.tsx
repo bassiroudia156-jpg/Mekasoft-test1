@@ -11,7 +11,6 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import AuthBrandPanel from '@/components/auth/AuthBrandPanel';
 import Field from '@/components/ui/Field';
@@ -19,23 +18,19 @@ import PhoneField from '@/components/ui/PhoneField';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 
-type Plan = 'PRO' | 'BUSINESS';
 type Method = 'CARD' | 'MOBILE_MONEY';
 type MobileProvider = 'MONEROO' | 'CHARIOW';
 
-const PLAN_INFO: Record<Plan, { label: string; priceFcfa: number }> = {
-  PRO: { label: 'Pro', priceFcfa: 9_900 },
-  BUSINESS: { label: 'Business', priceFcfa: 19_900 },
-};
-
-function isPlan(value: string | null): value is Plan {
-  return value === 'PRO' || value === 'BUSINESS';
-}
+// Single paid plan now (2026-08-20, BUSINESS retired — see
+// lib/server/plans/limits.ts's header comment). This page used to read a
+// `?plan=PRO|BUSINESS` query param from the landing page's two separate
+// pricing-card links; only one card links here now, so the param is gone
+// and the plan is just a constant. Mirrors PLAN_PRICING.PRO — same
+// local-copy convention as the rest of this page's display copy.
+const plan = 'PRO' as const;
+const PLAN_INFO = { label: 'Premium', priceFcfa: 9_900 };
 
 function CheckoutBody() {
-  const params = useSearchParams();
-  const plan: Plan = isPlan(params.get('plan')) ? (params.get('plan') as Plan) : 'PRO';
-
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [method, setMethod] = useState<Method>('CARD');
   const [mobileProvider, setMobileProvider] = useState<MobileProvider | null>(null);
@@ -91,7 +86,7 @@ function CheckoutBody() {
     }
   }
 
-  const pricing = PLAN_INFO[plan];
+  const pricing = PLAN_INFO;
 
   return (
     <div className="flex flex-col lg:flex-row bg-background min-h-screen">

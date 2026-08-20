@@ -17,8 +17,20 @@
 // public pricing page keeps its own local copy of the same numbers rather
 // than importing across that boundary, matching how it already declared
 // its feature-list constants before this change.
-
-export const PLANS = ['FREE', 'PRO', 'BUSINESS'] as const;
+//
+// 2026-08-20: BUSINESS retired per user decision — every advantage it used
+// to gate now lives on PRO, which is displayed everywhere as "Premium"
+// (PLAN_PRICING.PRO.label) while keeping the internal identifier `'PRO'`
+// unchanged. This was a deliberate choice, not an oversight: the `plan`
+// column is a plain string with real rows in the live DB and real Stripe
+// Price/webhook wiring keyed on `'PRO'` — renaming the wire-level value to
+// `'PREMIUM'` would need a data migration and Stripe-side changes for zero
+// functional benefit, since nothing user-facing ever reads the raw enum
+// value (every consumer goes through PLAN_INFO/PLAN_PRICING's `label`).
+// FREE is untouched — no limits or features here changed for it. Price
+// stayed at the old PRO price (9 900 FCFA) per explicit user choice, so
+// STRIPE_PRICE_ID_PRO didn't need to change either — see stripe.ts.
+export const PLANS = ['FREE', 'PRO'] as const;
 export type Plan = (typeof PLANS)[number];
 
 export function isPlan(value: string): value is Plan {
@@ -34,8 +46,8 @@ export interface PlanFeatures {
   monthlyReport: boolean;
   /** CSV data export (clients/vehicles/interventions/invoices/payments). */
   dataExport: boolean;
-  /** Per-member roles (ADMIN vs MEMBER) actually matter — moot below
-   * BUSINESS since those plans are capped at 1 user anyway. */
+  /** Per-member roles (ADMIN vs MEMBER) actually matter — moot on FREE
+   * since it's capped at 1 user anyway. */
   rolesAndPermissions: boolean;
 }
 
@@ -62,20 +74,10 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
       rolesAndPermissions: false,
     },
   },
+  // Everything BUSINESS used to gate on top of PRO's own unlimited
+  // clients/vehicles/interventions/branding/WhatsApp — 5-user team,
+  // monthly report, CSV export, roles — now lives here (2026-08-20).
   PRO: {
-    maxClients: null,
-    maxVehicles: null,
-    maxInterventionsPerMonth: null,
-    maxUsers: 1,
-    features: {
-      whatsappShare: true,
-      invoiceBranding: true,
-      monthlyReport: false,
-      dataExport: false,
-      rolesAndPermissions: false,
-    },
-  },
-  BUSINESS: {
     maxClients: null,
     maxVehicles: null,
     maxInterventionsPerMonth: null,
@@ -92,7 +94,10 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
 
 /** Falls back to FREE for any unrecognized/legacy value rather than
  * throwing — a bad `plan` string should degrade to the safest tier, never
- * to unlimited. */
+ * to unlimited. Also the safe landing spot for any pre-2026-08-20 row that
+ * still says `'BUSINESS'` in the DB (none existed at retirement time, but
+ * defends against a stray one the same way it already defended against any
+ * other unrecognized legacy value). */
 export function getPlanLimits(plan: string): PlanLimits {
   return PLAN_LIMITS[isPlan(plan) ? plan : 'FREE'];
 }
@@ -106,8 +111,9 @@ export interface PlanPricing {
   originalPriceFcfa: number | null;
 }
 
+// "Premium" is a display-only rename of PRO (2026-08-20) — see the header
+// comment for why the internal identifier stayed `'PRO'`.
 export const PLAN_PRICING: Record<Plan, PlanPricing> = {
   FREE: { label: 'Gratuit', priceFcfa: 0, originalPriceFcfa: null },
-  PRO: { label: 'Pro', priceFcfa: 9_900, originalPriceFcfa: 12_000 },
-  BUSINESS: { label: 'Business', priceFcfa: 19_900, originalPriceFcfa: 25_000 },
+  PRO: { label: 'Premium', priceFcfa: 9_900, originalPriceFcfa: 12_000 },
 };

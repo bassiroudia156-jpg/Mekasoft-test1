@@ -34,6 +34,14 @@ model User {
   // refused with 403 ACCOUNT_SUSPENDED. Mutated via /api/admin/users/[id]/status
   // (ADMIN can suspend; only SUPERADMIN can restore).
   status            String    @default("ACTIVE") // ACTIVE | SUSPENDED
+  // Set on every successful /api/auth/login (2026-08-20, admin dashboard
+  // "Utilisateurs actifs" KPI — needs a real signal, not a placeholder).
+  // NOT stamped by the OAuth callback (frontend/src/app/api/auth/oauth/
+  // google/callback — PROTECTED file, out of scope to touch) — an
+  // OAuth-only user's lastLoginAt stays null until this is revisited.
+  // Deliberately NOT bumped by token refresh either — that would make
+  // "active" mean "has an open tab", which overcounts.
+  lastLoginAt       DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -120,10 +128,13 @@ model Organization {
   city         String?
   teamSizeHint String? // SOLO | SMALL | MEDIUM | LARGE — analytics signal from onboarding step 3, not a hard limit
 
-  // Freemium plan (2026-08-18) — FREE | PRO | BUSINESS, see
-  // lib/server/plans/limits.ts for the actual limits/features per plan.
-  // Manually set by a SUPERADMIN for now (POST /api/admin/organizations/
-  // [id]/plan) — no payment collection wired yet, that's the next phase.
+  // Freemium plan (2026-08-18) — FREE | PRO ("Premium" — BUSINESS retired
+  // 2026-08-20, its advantages merged into PRO, see lib/server/plans/
+  // limits.ts's header comment), see lib/server/plans/limits.ts for the
+  // actual limits/features per plan. Plain String (no DB-level enum), so a
+  // pre-retirement row can still carry a stale "BUSINESS" value — every
+  // consumer must fall back safely rather than assume it's still valid
+  // (see getPlanLimits()/isPlan()/isPayablePlan()).
   plan          String    @default("FREE")
   planUpdatedAt DateTime?
   // Garage logo shown on invoice PDFs — Pro+ only (gated in the PDF
@@ -682,7 +693,7 @@ model Payment {
 
 // ───────────────────────────────────────────────────────────────────────
 // SaaS subscription billing (2026-08-18) — a garage (Organization) paying
-// MekaSoft for its own PRO/BUSINESS plan. Deliberately NOT the same domain
+// MekaSoft for its own PRO ("Premium") plan. Deliberately NOT the same domain
 // as `Payment` above (a garage's CLIENT paying the garage for a repair) —
 // different actor, different money flow, different provider set. Kept in
 // its own model pair rather than reusing the generic `Order` scaffold
@@ -706,7 +717,7 @@ model Subscription {
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  plan     String // PRO | BUSINESS — the plan this subscription pays for (never FREE)
+  plan     String // PRO — the plan this subscription pays for (never FREE; BUSINESS retired 2026-08-20, see Organization.plan's comment)
   provider String // STRIPE | MONEROO | CHARIOW
   status   String @default("ACTIVE") // ACTIVE | GRACE | EXPIRED | CANCELED
 
@@ -748,7 +759,7 @@ model SubscriptionPayment {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  plan        String // PRO | BUSINESS
+  plan        String // PRO (BUSINESS retired 2026-08-20, see Organization.plan's comment)
   provider    String // STRIPE | MONEROO | CHARIOW
   // Stripe: checkout.session.id (then invoice.id for renewals). Moneroo:
   // payment id. Chariow: purchase.id (sale id, per Chariow.md §3.1).
@@ -787,7 +798,7 @@ model AnonymousSubscriptionIntent {
   atelierName String
   phone       String
 
-  plan        String // PRO | BUSINESS
+  plan        String // PRO (BUSINESS retired 2026-08-20, see Organization.plan's comment)
   provider    String // STRIPE | MONEROO | CHARIOW
   providerRef String // provider's checkout/session reference
 
@@ -809,4 +820,115 @@ model AnonymousSubscriptionIntent {
   @@unique([provider, providerRef])
   @@index([email])
   @@index([status])
+}
+
+// ============================================================================
+// Admin back-office additions (2026-08-20) — Banani flow "Tableau Atelier",
+// screen "Admin Dashboard — Vue d'ensemble" + hand-designed sibling pages
+// (Utilisateurs/Garages/Tarification/Promotions/Analytics/Intégrations/
+// Support/Feedback/Journal d'activité). See .planning/banani/admin-dashboard.md.
+// ============================================================================
+
+// Admin-editable subscription pricing. Single source of truth for price
+// stays `lib/server/plans/limits.ts`'s PLAN_PRICING constant — this table
+// is an optional override read by `lib/server/plans/pricing.ts`'s
+// `getPlanPricing()`. Empty table (or a plan with no row) falls back to the
+// static constant, so the app never breaks if this table hasn't been
+// seeded yet. Only 'PRO' is ever expected to have a row in practice (FREE
+// is definitionally 0 and the admin UI doesn't offer to edit it), but the
+// model itself doesn't hardcode that assumption.
+model PlanPricing {
+  id                String   @id @default(cuid())
+  plan              String   @unique // 'PRO' today; schema doesn't special-case it
+  priceFcfa         Int
+  originalPriceFcfa Int?
+  updatedAt         DateTime @updatedAt
+  updatedByAdminId  String?
+
+  @@index([plan])
+}
+
+// Promo codes. Redemption is atomic (guard + increment in one tx, mirroring
+// the withdrawals/lock.ts pattern) to prevent a maxRedemptions coupon from
+// being oversold under concurrent checkouts — see
+// lib/server/coupons/redeem.ts.
+model Coupon {
+  id            String  @id @default(cuid())
+  code          String  @unique // stored uppercase, validated case-insensitively at lookup
+  discountType  String // PERCENT | FIXED
+  discountValue Int // 1-100 for PERCENT; FCFA amount for FIXED
+  // null = applies to any paid plan. Only 'PRO' is meaningful today (the
+  // only paid plan), kept as a string (not a bool) so a future second paid
+  // tier doesn't need a schema change.
+  appliesToPlan String?
+  // null = unlimited redemptions.
+  maxRedemptions   Int?
+  redeemedCount    Int       @default(0)
+  active           Boolean   @default(true)
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+  createdByAdminId String?
+
+  redemptions CouponRedemption[]
+
+  @@index([code])
+  @@index([active])
+}
+
+// One row per successful redemption — lets the admin Promotions page show
+// "who used this code" and lets checkout routes tie a discounted amount
+// back to its coupon without parsing free-text. Exactly one of
+// subscriptionPaymentId / anonymousIntentId is set, matching the existing
+// two-parallel-flows split (SubscriptionPayment = authenticated upgrade,
+// AnonymousSubscriptionIntent = landing-page checkout) — no FK to either
+// (both models are fair-game/high-churn; a soft reference avoids coupling
+// this table's migrations to theirs).
+model CouponRedemption {
+  id                    String   @id @default(cuid())
+  couponId              String
+  coupon                Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  subscriptionPaymentId String?
+  anonymousIntentId     String?
+  amountBeforeFcfa      Int
+  amountAfterFcfa       Int
+  redeemedAt            DateTime @default(now())
+
+  @@index([couponId])
+  @@index([subscriptionPaymentId])
+  @@index([anonymousIntentId])
+}
+
+// Support tickets — submitted from /profile (logged-in) via POST /api/support
+// (rate-limited, optionalAuth: userId set when logged in, still accepts
+// anonymous name+email). Admin inbox at /admin/support; reply sends a real
+// email via EmailQueue (see lib/server/support/email-templates.ts) and
+// moves status to RESOLVED.
+model SupportTicket {
+  id         String    @id @default(cuid())
+  userId     String?
+  name       String
+  email      String
+  subject    String
+  message    String
+  status     String    @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([email])
+}
+
+// Free-text product feedback + optional star rating — submitted from
+// /profile via POST /api/feedback (rate-limited, optionalAuth). Admin list
+// at /admin/feedback with a "traité" (reviewed) toggle; no reply mechanism
+// (unlike SupportTicket) — this is one-way signal, not a conversation.
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String?
+  message   String
+  rating    Int? // 1-5, optional
+  reviewed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([reviewed, createdAt])
 }

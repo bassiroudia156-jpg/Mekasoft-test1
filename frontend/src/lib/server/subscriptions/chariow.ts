@@ -23,9 +23,11 @@ const log = createLogger();
 const CHARIOW_API_URL = process.env.CHARIOW_API_URL || 'https://api.chariow.com/v1';
 const FETCH_TIMEOUT_MS = 15_000;
 
-function productIdForPlan(plan: 'PRO' | 'BUSINESS'): string | null {
-  const id =
-    plan === 'PRO' ? process.env.CHARIOW_PRODUCT_ID_PRO : process.env.CHARIOW_PRODUCT_ID_BUSINESS;
+// `plan` param kept (even though there's only one valid value now, since
+// BUSINESS retired 2026-08-20 — see lib/server/plans/limits.ts's header
+// comment) for signature symmetry with stripe.ts's priceIdForPlan.
+function productIdForPlan(plan: 'PRO'): string | null {
+  const id = plan === 'PRO' ? process.env.CHARIOW_PRODUCT_ID_PRO : undefined;
   return id && id.length > 0 ? id : null;
 }
 
@@ -33,8 +35,7 @@ function isConfigured(): boolean {
   return !!(
     process.env.CHARIOW_API_KEY &&
     process.env.CHARIOW_WEBHOOK_SECRET &&
-    process.env.CHARIOW_PRODUCT_ID_PRO &&
-    process.env.CHARIOW_PRODUCT_ID_BUSINESS
+    process.env.CHARIOW_PRODUCT_ID_PRO
   );
 }
 

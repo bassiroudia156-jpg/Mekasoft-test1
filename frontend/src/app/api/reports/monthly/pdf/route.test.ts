@@ -1,4 +1,6 @@
-// Freemium plan (2026-08-18) — Business-only monthly report PDF.
+// Freemium plan (2026-08-18) — Premium-only monthly report PDF (2026-08-20:
+// was Business-only, merged into PRO/"Premium" — see
+// lib/server/plans/limits.ts's header comment).
 import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -39,10 +41,10 @@ beforeEach(() => {
 });
 
 describe('/api/reports/monthly/pdf', () => {
-  it('403s PLAN_FEATURE_LOCKED on a non-BUSINESS org without building the report', async () => {
+  it('403s PLAN_FEATURE_LOCKED on a FREE org without building the report', async () => {
     prismaMock.organization.findUnique.mockResolvedValueOnce({
       name: 'Garage',
-      plan: 'PRO',
+      plan: 'FREE',
     } as never);
     const res = await GET(makeGet());
     expect(res.status).toBe(403);
@@ -51,10 +53,10 @@ describe('/api/reports/monthly/pdf', () => {
     expect(mockBuildReport).not.toHaveBeenCalled();
   });
 
-  it('returns an inline PDF for a BUSINESS org', async () => {
+  it('returns an inline PDF for a PRO/"Premium" org', async () => {
     prismaMock.organization.findUnique.mockResolvedValueOnce({
       name: 'Garage Demo',
-      plan: 'BUSINESS',
+      plan: 'PRO',
     } as never);
     mockBuildReport.mockResolvedValueOnce({
       organizationName: 'Garage Demo',
@@ -90,7 +92,7 @@ describe('/api/reports/monthly/pdf', () => {
   it('accepts a well-formed ?month=YYYY-MM and passes that month through', async () => {
     prismaMock.organization.findUnique.mockResolvedValueOnce({
       name: 'Garage Demo',
-      plan: 'BUSINESS',
+      plan: 'PRO',
     } as never);
     mockBuildReport.mockResolvedValueOnce({
       organizationName: 'Garage Demo',

@@ -65,7 +65,7 @@ export const POST = createWebhookHandler({
       });
       return {};
     }
-    const plan = planRaw as 'PRO' | 'BUSINESS';
+    const plan = planRaw as 'PRO';
 
     // `organizationId` is really an AnonymousSubscriptionIntent id when this
     // Checkout was started from the public landing page (2026-08-19) rather

@@ -34,7 +34,7 @@ const Body = z.object({
   email: zEmail,
   atelierName: z.string().trim().min(2, 'Nom trop court').max(120),
   phone: zPhone,
-  plan: z.enum(['PRO', 'BUSINESS']),
+  plan: z.enum(['PRO']),
   provider: z.enum(SUBSCRIPTION_PROVIDERS),
 });
 

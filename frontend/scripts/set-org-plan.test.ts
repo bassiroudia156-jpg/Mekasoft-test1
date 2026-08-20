@@ -68,11 +68,11 @@ describe('scripts/set-org-plan', () => {
       slug: 'garage-demo',
       name: 'Garage Demo',
       ownerId: 'user_1',
-      plan: 'BUSINESS',
+      plan: 'PRO',
     } as never);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
-    const code = await main(['garage-demo', 'BUSINESS'], { prisma: prismaMock });
+    const code = await main(['garage-demo', 'PRO'], { prisma: prismaMock });
 
     expect(code).toBe(0);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();

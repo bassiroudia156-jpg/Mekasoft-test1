@@ -118,7 +118,8 @@ export async function activateSubscription(
 
   // 4. Bump the org's plan — this is what actually lifts PLAN_LIMITS caps.
   // The isPayablePlan() guard at the call sites already ensures input.plan
-  // is PRO or BUSINESS, never FREE.
+  // is PRO, never FREE (BUSINESS retired 2026-08-20 — see
+  // lib/server/plans/limits.ts's header comment).
   await client.organization.update({
     where: { id: input.organizationId },
     data: { plan: input.plan, planUpdatedAt: now },

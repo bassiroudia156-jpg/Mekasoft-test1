@@ -1,7 +1,17 @@
 # Banani implementation status — MekaSoft (Tableau Atelier)
 
-Last updated: 2026-08-19
+Last updated: 2026-08-20
 Flow: [Tableau Atelier](https://app.banani.co/flow/83o75a2tYyMD) — 109 screens fetched. Phases 0–7 done (design foundation, auth, onboarding, team, clients & vehicles, interventions & parts, invoices, payments); Phases 8–10 pending (see roadmap in `IMPLEMENTATION-PLAN.md`).
+
+## Pricing simplified: Business tier retired, merged into Pro/"Premium" (2026-08-20)
+
+Per user decision, after living as a real 3-tier system (Gratuit/Pro/Business — see the 2026-08-18 entry below): the BUSINESS plan is **retired**. All of its advantages (up to 5 users with roles, monthly report PDF, CSV export) now ship on **PRO**, which is displayed as **"Premium"** everywhere (the internal/DB/Stripe identifier stays `'PRO'` — see `lib/server/plans/limits.ts`'s header comment for why). FREE is unchanged. Price kept at the old Pro price, 9 900 FCFA/mois (user's explicit choice) — the existing `STRIPE_PRICE_ID_PRO` Stripe Price object needed no dashboard change.
+
+- `lib/server/plans/limits.ts` — `PLANS` is now `['FREE', 'PRO']`; `PLAN_LIMITS.PRO` gained `maxUsers: 5` and all `features: true`; `PLAN_LIMITS.BUSINESS` removed; `PLAN_PRICING.PRO.label` is now `'Premium'`.
+- Every consumer keyed on the now-removed `'BUSINESS'` literal was found via `PayablePlan = Exclude<Plan, 'FREE'>` narrowing to just `'PRO'` and re-running `tsc --noEmit` until clean, then a text sweep (`grep -ri BUSINESS`) for copy/comments TS wouldn't catch.
+- Two real bugs caught by that sweep (not just cosmetic): `components/dashboard/ExportMenu.tsx` was still gating on `plan === 'BUSINESS'` (would have shown the Premium org's own upsell copy to itself, forever hiding its export/report links); `app/dashboard/page.tsx`'s `showUpgrade` prop was `orgPlan !== 'BUSINESS'` (always true post-retirement, so the "Upgrader" pill would show to Premium subscribers too) — fixed to `orgPlan === 'FREE'`. Also `lib/server/subscriptions/types.ts`'s `isPayablePlan()` still accepted `'BUSINESS'` as payable — fixed to `=== 'PRO'` only, so a stale legacy row can't slip through as payable.
+- UI: `app/page.tsx` (landing `#tarifs`), `app/subscriptions/plans/page.tsx`, `app/profile/page.tsx`, `components/subscriptions/UpgradeSubscriptionModal.tsx` collapsed from 3-card/plan-picker layouts to 2-card/single-plan-summary; `app/subscriptions/checkout/page.tsx` dropped its now-dead `?plan=PRO|BUSINESS` query param entirely.
+- No real customer was ever on BUSINESS (verified against the live DB before implementing) — code-only change, no data migration needed.
 
 ## Phase 0 — Design foundation — ✅ Done (2026-08-16)
 

@@ -1,7 +1,9 @@
 // Banani: 83o75a2tYyMD/screens/UpgradePlansPage.jsx ("Upgrade Plans Page")
-// — 3-tier pricing grid + FAQ. Real prices/features substituted for
-// Banani's placeholder tiers (Basique/Professionnel/Entreprise → our real
-// Gratuit/Pro/Business, see .planning/banani/subscription-plans-page.md).
+// — originally a 3-tier pricing grid + FAQ (Basique/Professionnel/
+// Entreprise → our real Gratuit/Pro/Business, see
+// .planning/banani/subscription-plans-page.md). Down to 2 tiers since
+// 2026-08-20 — BUSINESS retired, its advantages merged into PRO/"Premium"
+// (see lib/server/plans/limits.ts's header comment).
 // Reached from Mon profil's upgrade banner ("Voir les forfaits") — that
 // section lived on /settings until 2026-08-19, when it moved to /profile
 // alongside Atelier (see profile/page.tsx's header comment).
@@ -45,33 +47,18 @@ const PLANS = [
   },
   {
     plan: 'PRO' as const,
-    label: 'Pro',
-    blurb: 'Le plus populaire',
+    label: 'Premium',
+    blurb: 'Toutes les fonctionnalités',
     priceFcfa: 9_900,
     originalPriceFcfa: 12_000,
     featured: true,
     badge: 'Populaire' as string | null,
     features: [
-      { text: 'Clients illimités', included: true },
-      { text: 'Véhicules illimités', included: true },
-      { text: 'Interventions illimitées', included: true },
+      { text: 'Clients, véhicules, interventions illimités', included: true },
       { text: 'Partage WhatsApp', included: true },
       { text: 'Logo sur les factures', included: true },
-    ],
-  },
-  {
-    plan: 'BUSINESS' as const,
-    label: 'Business',
-    blurb: 'Pour les plus grands',
-    priceFcfa: 19_900,
-    originalPriceFcfa: 25_000,
-    badge: 'Équipes' as string | null,
-    features: [
-      { text: 'Tout Pro', included: true },
-      { text: "Jusqu'à 5 utilisateurs", included: true },
-      { text: 'Rôles & permissions', included: true },
-      { text: 'Rapport mensuel PDF', included: true },
-      { text: 'Export de données CSV', included: true },
+      { text: "Jusqu'à 5 utilisateurs avec rôles", included: true },
+      { text: 'Rapport mensuel PDF + export CSV', included: true },
     ],
   },
 ];
@@ -79,7 +66,7 @@ const PLANS = [
 const FAQS = [
   {
     q: 'Puis-je changer de forfait à tout moment ?',
-    a: 'Oui — passez à Pro ou Business quand vous en avez besoin. Le changement est actif dès la confirmation du paiement.',
+    a: 'Oui — passez à Premium quand vous en avez besoin. Le changement est actif dès la confirmation du paiement.',
   },
   {
     q: 'Le plan Gratuit a-t-il une durée limitée ?',
@@ -105,7 +92,6 @@ export default function SubscriptionPlansPage() {
   const [org, setOrg] = useState<OrgSummary | null>(null);
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'PRO' | 'BUSINESS'>('PRO');
   const [refreshTick, setRefreshTick] = useState(0);
 
   // 2026-08-19: "je veux que le chargement des donnees soit en temps reel" —
@@ -157,11 +143,6 @@ export default function SubscriptionPlansPage() {
 
   if (!user) return null;
 
-  function openUpgrade(plan: 'PRO' | 'BUSINESS') {
-    setSelectedPlan(plan);
-    setUpgradeOpen(true);
-  }
-
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar active="profile" />
@@ -186,9 +167,9 @@ export default function SubscriptionPlansPage() {
               section (dark inverted "featured" card, inline pill badge,
               plain price stack, primary-outline buttons on the non-featured
               tiers) so a logged-in upgrade and an anonymous visitor see the
-              identical pricing presentation. base: stacked, md+: 3 columns
-              (Banani desktop grid). */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
+              identical pricing presentation. base: stacked, md+: 2 columns
+              (was 3 before BUSINESS retired 2026-08-20). */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
             {PLANS.map((p) => {
               const isCurrent = org?.plan === p.plan;
               const featured = !!p.featured;
@@ -303,7 +284,7 @@ export default function SubscriptionPlansPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => openUpgrade(p.plan)}
+                      onClick={() => setUpgradeOpen(true)}
                       className={`w-full py-2 lg:py-3 rounded lg:rounded-md text-xs lg:text-sm font-medium text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
                         featured
                           ? 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -339,7 +320,6 @@ export default function SubscriptionPlansPage() {
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
         availableProviders={availableProviders}
-        defaultPlan={selectedPlan}
       />
     </div>
   );

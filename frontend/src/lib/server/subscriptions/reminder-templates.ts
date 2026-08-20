@@ -12,7 +12,7 @@ export interface EmailTemplate {
 
 export interface SubscriptionReminderArgs {
   organizationName: string;
-  plan: 'PRO' | 'BUSINESS';
+  plan: 'PRO';
   daysUntilExpiry: number;
   renewUrl: string;
 }

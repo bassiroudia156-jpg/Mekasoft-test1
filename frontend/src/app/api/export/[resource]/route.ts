@@ -1,6 +1,7 @@
-// GET /api/export/[resource] — Business-plan CSV export
-// (clients|vehicles|interventions|invoices|payments). One flat file per
-// resource rather than a combined ZIP — no new dependency, and each
+// GET /api/export/[resource] — Premium-plan CSV export (2026-08-20: was
+// Business-only, merged into PRO/"Premium" — see lib/server/plans/limits.ts's
+// header comment) (clients|vehicles|interventions|invoices|payments). One
+// flat file per resource rather than a combined ZIP — no new dependency, and each
 // resource already has a natural single-sheet shape. Capped at 10k rows
 // per export (a CSV download, not a paginated API) — generous for this
 // product's scale, prevents an unbounded query on a garage with years of
@@ -185,7 +186,7 @@ export async function GET(
       return NextResponse.json(
         {
           error: 'PLAN_FEATURE_LOCKED',
-          message: "L'export de données est réservé au plan Business.",
+          message: "L'export de données est réservé au plan Premium.",
         },
         { status: 403, headers: { 'x-request-id': ctx.requestId } },
       );

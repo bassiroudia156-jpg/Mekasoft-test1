@@ -70,7 +70,7 @@ describe('downgradeExpiredSubscriptions', () => {
   it('processes multiple candidates independently', async () => {
     const prisma = makePrisma([
       { id: 'sub_1', organizationId: 'org_1', plan: 'PRO' },
-      { id: 'sub_2', organizationId: 'org_2', plan: 'BUSINESS' },
+      { id: 'sub_2', organizationId: 'org_2', plan: 'PRO' },
     ]);
     const result = await downgradeExpiredSubscriptions({ prisma });
     expect(result.downgraded).toBe(2);

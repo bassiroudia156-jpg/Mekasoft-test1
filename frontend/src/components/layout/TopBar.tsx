@@ -9,10 +9,11 @@ export interface TopBarProps {
   title?: string;
   onNewIntervention?: () => void;
   /** Small "Upgrader" pill linking to /subscriptions/plans — caller decides
-   * visibility (dashboard only shows it once the org's plan is known and
-   * isn't already Business). Deliberately a quiet outline pill, not another
-   * filled CTA competing with "Nouvelle intervention" — see 2026-08-19
-   * dashboard upgrade request. */
+   * visibility (dashboard only shows it while the org is still on FREE;
+   * PRO/"Premium" is the only paid tier since BUSINESS retired 2026-08-20 —
+   * see lib/server/plans/limits.ts's header comment). Deliberately a quiet
+   * outline pill, not another filled CTA competing with "Nouvelle
+   * intervention" — see 2026-08-19 dashboard upgrade request. */
   showUpgrade?: boolean;
   /** Rendered in the slot that used to hold the free-text search box (right
    * of "Nouvelle intervention", wraps to its own full-width row on mobile).

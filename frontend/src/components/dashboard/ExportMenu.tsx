@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/ui/Icon';
 
 export interface ExportMenuProps {
-  /** FREE | PRO | BUSINESS — null while the org/plan is still loading. */
+  /** FREE | PRO ("Premium") — null while the org/plan is still loading. */
   plan: string | null;
 }
 
@@ -24,15 +24,17 @@ const EXPORT_RESOURCES = [
 // page (/export, reached via a dedicated Sidebar button before that too),
 // but a one-off download doesn't need a whole nav destination, so both moved
 // into this dropdown right where "Nouvelle intervention" already lives.
-// Business-only feature (server-side enforced on both endpoints — see
-// api/export/[resource] and api/reports/monthly/pdf) — the trigger button
-// itself always renders regardless of plan so a Business org's access never
-// flickers away, but the dropdown swaps its content for an upsell line on
-// lower plans instead of live download links.
+// Premium-only feature (server-side enforced on both endpoints — see
+// api/export/[resource] and api/reports/monthly/pdf; 2026-08-20: was
+// Business-only, merged into PRO/"Premium" along with the rest of the
+// retired BUSINESS tier — see lib/server/plans/limits.ts's header comment)
+// — the trigger button itself always renders regardless of plan so a
+// Premium org's access never flickers away, but the dropdown swaps its
+// content for an upsell line on Free instead of live download links.
 export default function ExportMenu({ plan }: ExportMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const isBusiness = plan === 'BUSINESS';
+  const isPro = plan === 'PRO';
   const isLoading = plan === null;
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function ExportMenu({ plan }: ExportMenuProps) {
             </p>
             {isLoading ? (
               <p className="text-xs text-muted-foreground">Chargement…</p>
-            ) : isBusiness ? (
+            ) : isPro ? (
               <a
                 href="/api/reports/monthly/pdf"
                 target="_blank"
@@ -86,7 +88,7 @@ export default function ExportMenu({ plan }: ExportMenuProps) {
                 Télécharger le rapport de ce mois-ci
               </a>
             ) : (
-              <p className="text-xs text-muted-foreground italic">Réservé au plan Business.</p>
+              <p className="text-xs text-muted-foreground italic">Réservé au plan Premium.</p>
             )}
           </div>
 
@@ -103,7 +105,7 @@ export default function ExportMenu({ plan }: ExportMenuProps) {
             </p>
             {isLoading ? (
               <p className="text-xs text-muted-foreground">Chargement…</p>
-            ) : isBusiness ? (
+            ) : isPro ? (
               <div className="flex flex-wrap gap-1.5">
                 {EXPORT_RESOURCES.map((r) => (
                   <a
@@ -118,7 +120,7 @@ export default function ExportMenu({ plan }: ExportMenuProps) {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">Réservé au plan Business.</p>
+              <p className="text-xs text-muted-foreground italic">Réservé au plan Premium.</p>
             )}
           </div>
         </div>

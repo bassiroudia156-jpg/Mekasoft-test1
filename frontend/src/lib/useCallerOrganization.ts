@@ -15,7 +15,7 @@ interface OrgSummary {
 
 export interface CallerOrganization {
   organizationId: string | null;
-  /** FREE | PRO | BUSINESS — 'FREE' while loading/absent so plan-gated UI
+  /** FREE | PRO ("Premium") — 'FREE' while loading/absent so plan-gated UI
    * fails closed (hidden) rather than briefly flashing a locked feature. */
   plan: string;
   loading: boolean;

@@ -1,11 +1,17 @@
 'use client';
 
-// Plan × provider picker — POSTs /api/subscriptions/checkout and redirects
-// the whole tab to the hosted checkout page returned by whichever provider
-// was picked (Stripe/Moneroo/Chariow). No client-side "processing" state
-// beyond the redirect itself — the actual outcome is decided by
+// Provider picker — POSTs /api/subscriptions/checkout and redirects the
+// whole tab to the hosted checkout page returned by whichever provider was
+// picked (Stripe/Moneroo/Chariow). No client-side "processing" state beyond
+// the redirect itself — the actual outcome is decided by
 // /subscriptions/return polling /api/subscriptions/verify after the user
 // comes back.
+//
+// 2026-08-20: dropped the Pro-vs-Business plan picker — BUSINESS was
+// retired (its advantages merged into PRO/"Premium", see
+// lib/server/plans/limits.ts's header comment), leaving nothing to choose
+// between. This modal now only ever checks out `'PRO'`; the plan grid
+// became a single static summary card.
 import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import Modal from '@/components/ui/Modal';
@@ -16,16 +22,13 @@ export interface UpgradeSubscriptionModalProps {
   open: boolean;
   onClose: () => void;
   availableProviders: string[];
-  defaultPlan?: 'PRO' | 'BUSINESS';
 }
 
-// Mirrors lib/server/plans/limits.ts's PLAN_PRICING — same local-copy
-// convention as the landing page / Settings' PLAN_INFO (that module lives
-// under lib/server/, this is client-rendered display copy).
-const PLANS = [
-  { value: 'PRO' as const, label: 'Pro', priceFcfa: 9_900 },
-  { value: 'BUSINESS' as const, label: 'Business', priceFcfa: 19_900 },
-];
+// Mirrors lib/server/plans/limits.ts's PLAN_PRICING.PRO — same local-copy
+// convention as the landing page / profile page (that module lives under
+// lib/server/, this is client-rendered display copy).
+const PLAN_LABEL = 'Premium';
+const PLAN_PRICE_FCFA = 9_900;
 
 const PROVIDERS: Record<string, { label: string; blurb: string; icon: string }> = {
   STRIPE: {
@@ -52,9 +55,7 @@ export default function UpgradeSubscriptionModal({
   open,
   onClose,
   availableProviders,
-  defaultPlan = 'PRO',
 }: UpgradeSubscriptionModalProps) {
-  const [plan, setPlan] = useState<'PRO' | 'BUSINESS'>(defaultPlan);
   const [provider, setProvider] = useState<string | null>(availableProviders[0] ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export default function UpgradeSubscriptionModal({
     try {
       const res = await api<{ checkoutUrl: string }>('/api/subscriptions/checkout', {
         method: 'POST',
-        body: { plan, provider },
+        body: { plan: 'PRO', provider },
       });
       window.location.href = res.checkoutUrl;
     } catch (err) {
@@ -84,30 +85,17 @@ export default function UpgradeSubscriptionModal({
     <Modal
       open={open}
       onClose={handleClose}
-      title="Passer à un plan supérieur"
+      title="Passer au plan Premium"
       icon="zap"
       maxWidth="lg"
     >
       <div className="flex flex-col gap-6">
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest mb-3">Plan</p>
-          <div className="grid grid-cols-2 gap-3">
-            {PLANS.map((p) => (
-              <button
-                key={p.value}
-                type="button"
-                onClick={() => setPlan(p.value)}
-                className={`text-left rounded-md border px-4 py-3 transition-colors ${
-                  plan === p.value ? 'border-primary bg-primary/5' : 'border-border hover:bg-input'
-                }`}
-              >
-                <p className="text-sm font-semibold text-foreground">{p.label}</p>
-                <p className="text-xs text-muted-foreground">
-                  {p.priceFcfa.toLocaleString('fr-FR')} FCFA/mois
-                </p>
-              </button>
-            ))}
-          </div>
+        <div className="rounded-md border border-primary bg-primary/5 px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">Plan {PLAN_LABEL}</p>
+          <p className="text-xs text-muted-foreground">
+            {PLAN_PRICE_FCFA.toLocaleString('fr-FR')} FCFA/mois — accès à toutes les
+            fonctionnalités.
+          </p>
         </div>
 
         <div>

@@ -1,7 +1,12 @@
 // Shared types for the subscription-billing domain (2026-08-18) — a garage
-// (Organization) paying MekaSoft for its own PRO/BUSINESS plan. See the
+// (Organization) paying MekaSoft for its own PRO ("Premium") plan. See the
 // schema.prisma comment above `model Subscription` for how this differs
 // from the garage-invoicing `Payment` domain.
+//
+// 2026-08-20: BUSINESS retired, merged into PRO/"Premium" — see
+// lib/server/plans/limits.ts's header comment. isPayablePlan() below no
+// longer accepts 'BUSINESS': a stale row (webhook replay, old client, the
+// legacy test fixture) carrying that value must NOT be treated as payable.
 //
 // Deliberately NOT `import 'server-only'` — pure types, no secrets, safe to
 // import from both server routes and tests.
@@ -18,7 +23,7 @@ export function isSubscriptionProvider(value: string): value is SubscriptionProv
 export type PayablePlan = Exclude<Plan, 'FREE'>;
 
 export function isPayablePlan(value: string): value is PayablePlan {
-  return value === 'PRO' || value === 'BUSINESS';
+  return value === 'PRO';
 }
 
 export interface SubscriptionCheckoutInput {

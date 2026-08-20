@@ -91,10 +91,10 @@ describe('activateSubscription', () => {
     const client = makeClient();
     await activateSubscription(client, {
       organizationId: 'org_1',
-      plan: 'BUSINESS',
+      plan: 'PRO',
       provider: 'STRIPE',
       providerRef: 'in_1',
-      amount: 19_900,
+      amount: 9_900,
       currency: 'XOF',
       stripePeriodEnd: new Date('2026-09-18T00:00:00Z'),
     });
@@ -155,15 +155,15 @@ describe('activateSubscription', () => {
     const client = makeClient();
     await activateSubscription(client, {
       organizationId: 'org_1',
-      plan: 'BUSINESS',
+      plan: 'PRO',
       provider: 'MONEROO',
       providerRef: 'pay_3',
-      amount: 19_900,
+      amount: 9_900,
       currency: 'XOF',
     });
     expect(client.organization.update).toHaveBeenCalledWith({
       where: { id: 'org_1' },
-      data: { plan: 'BUSINESS', planUpdatedAt: expect.any(Date) },
+      data: { plan: 'PRO', planUpdatedAt: expect.any(Date) },
     });
   });
 });

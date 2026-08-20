@@ -63,11 +63,11 @@ describe('/api/admin/organizations — list', () => {
     expect(body.items[0]?.id).toBe('org_1');
   });
 
-  it('GET filters by ?plan=', async () => {
+  it('GET filters by ?plan= (raw passthrough — not validated against PLANS, so a legacy value like a retired BUSINESS still matches historical rows)', async () => {
     prismaMock.organization.findMany.mockResolvedValueOnce([]);
-    await GET(makeGet('http://test/api/admin/organizations?plan=BUSINESS'));
+    await GET(makeGet('http://test/api/admin/organizations?plan=PRO'));
     const where = prismaMock.organization.findMany.mock.calls[0]![0]!.where as { plan?: string };
-    expect(where.plan).toBe('BUSINESS');
+    expect(where.plan).toBe('PRO');
   });
 
   it('GET ?q= searches name/slug without dropping the cursor filter (AND-nested, not colliding OR keys)', async () => {
