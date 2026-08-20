@@ -23,6 +23,7 @@ import {
   createAccessToken,
   createRefreshToken,
 } from '@/lib/server/auth';
+import { checkUserLimitForInviteAccept } from '@/lib/server/plans/guard';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const PASSWORD_MIN = Number(process.env.AUTH_PASSWORD_MIN_LENGTH ?? 10);
@@ -93,6 +94,22 @@ export async function POST(
       return NextResponse.json(
         { error: 'INVITE_EXPIRED' },
         { status: 410, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    // Re-check the seat cap here, not just at invite-send time — the org's
+    // plan can have dropped underneath a still-PENDING invite (grace-period
+    // expiry, a cancelled Stripe subscription) in the days between send and
+    // accept. See checkUserLimitForInviteAccept's own comment for why the
+    // invite being accepted is excluded from the pending count.
+    const limitError = await checkUserLimitForInviteAccept(invite.organizationId, invite.id);
+    if (limitError) {
+      return NextResponse.json(
+        {
+          error: limitError.code,
+          message: `Le plan ${limitError.plan} est limité à ${limitError.limit} utilisateur${limitError.limit > 1 ? 's' : ''}.`,
+        },
+        { status: 403, headers: { 'x-request-id': ctx.requestId } },
       );
     }
 

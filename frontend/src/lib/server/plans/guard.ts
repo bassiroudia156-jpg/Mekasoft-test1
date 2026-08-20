@@ -81,3 +81,33 @@ export async function checkUserLimit(organizationId: string): Promise<PlanLimitE
   }
   return null;
 }
+
+/** Re-checked at accept time (not just at invite-send time) — an invite can
+ * sit PENDING for days, and the org's plan can drop underneath it in the
+ * meantime (grace-period expiry, a cancelled Stripe subscription). Excludes
+ * `inviteId` from the pending count: that invite already reserved its seat
+ * when it was sent (and was allowed to, right up to the cap) — accepting it
+ * converts a reservation into a real member without changing the total
+ * headcount, so it must NOT double-count against itself. Without the
+ * exclusion, any accept on an org sitting exactly at its cap (the normal,
+ * expected case — invites are allowed to fill the cap) would be wrongly
+ * rejected. This only fires when capacity genuinely shrank since the invite
+ * was sent. */
+export async function checkUserLimitForInviteAccept(
+  organizationId: string,
+  inviteId: string,
+): Promise<PlanLimitError | null> {
+  const plan = await getOrgPlan(organizationId);
+  const { maxUsers } = getPlanLimits(plan);
+  if (maxUsers === null) return null;
+  const [memberCount, otherPendingInviteCount] = await Promise.all([
+    prisma.organizationMember.count({ where: { organizationId } }),
+    prisma.organizationInvite.count({
+      where: { organizationId, status: 'PENDING', id: { not: inviteId } },
+    }),
+  ]);
+  if (memberCount + otherPendingInviteCount >= maxUsers) {
+    return { code: 'PLAN_LIMIT_USERS', limit: maxUsers, plan };
+  }
+  return null;
+}
