@@ -13,6 +13,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
+import { fireSuccessConfetti } from '@/lib/confetti';
 import Icon from '@/components/ui/Icon';
 import Button from '@/components/ui/Button';
 
@@ -30,6 +31,14 @@ const POLL_INTERVAL_MS = 2500;
 const MAX_ATTEMPTS = 20; // ~50s, same generosity as /subscriptions/return
 
 const PLAN_LABEL: Record<string, string> = { PRO: 'Pro', BUSINESS: 'Business' };
+// Same copy as /subscriptions/return's PROVIDER_LABEL — kept as a local
+// duplicate rather than a shared import since this page is public (no
+// server-only concerns) but otherwise unrelated to that authenticated page.
+const PROVIDER_LABEL: Record<string, string> = {
+  STRIPE: 'Carte bancaire (Stripe)',
+  MONEROO: 'Mobile Money (Moneroo)',
+  CHARIOW: 'Mobile Money (Chariow)',
+};
 
 function WelcomeBody() {
   const params = useSearchParams();
@@ -54,6 +63,7 @@ function WelcomeBody() {
         setResult(res);
         if (res.status === 'SUCCEEDED') {
           setState('succeeded');
+          fireSuccessConfetti();
           return;
         }
         if (res.status === 'FAILED') {
@@ -93,9 +103,11 @@ function WelcomeBody() {
     // /subscriptions/return/page.tsx's poll effect.
   }, [intentId, pollGeneration]);
 
+  const cardMaxWidth = state === 'succeeded' ? 'max-w-lg' : 'max-w-sm';
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6 py-10">
-      <div className="w-full max-w-sm text-center">
+      <div className={`w-full ${cardMaxWidth} text-center`}>
         {state === 'checking' && (
           <>
             <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
@@ -115,20 +127,70 @@ function WelcomeBody() {
 
         {state === 'succeeded' && (
           <>
-            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-success/10">
-              <Icon i="check-circle" size={26} className="text-success" />
+            {/* Success banner — same visual language as /subscriptions/return's
+                succeeded state, so both payment-success entry points (already
+                logged in vs. anonymous landing-page checkout) feel like the
+                same product. */}
+            <div className="bg-success/10 border border-success rounded-md p-5 flex items-center gap-4 text-left mb-6">
+              <Icon i="check-circle" size={24} className="text-success flex-shrink-0" />
+              <div>
+                <div className="font-semibold text-success text-sm">Paiement confirmé !</div>
+                <p className="text-xs text-success/80">
+                  Bienvenue sur le forfait {PLAN_LABEL[result?.plan ?? ''] ?? result?.plan}.
+                </p>
+              </div>
             </div>
-            <h1 className="text-xl font-bold font-headings text-foreground mb-2">
+
+            <h1 className="text-2xl font-bold font-headings text-foreground mb-2">
               Abonnement {PLAN_LABEL[result?.plan ?? ''] ?? result?.plan} activé !
             </h1>
+            <p className="text-sm text-muted-foreground mb-6">Votre atelier MekaSoft est prêt.</p>
+
+            {/* Summary card */}
+            <div className="bg-surface border border-primary rounded-lg p-6 text-left mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
+                    Forfait
+                  </div>
+                  <h2 className="text-xl font-bold font-headings text-foreground mb-3">
+                    {PLAN_LABEL[result?.plan ?? ''] ?? result?.plan}
+                  </h2>
+                  <div className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
+                    Statut
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Icon i="check-circle" size={14} className="text-success" />
+                    <span className="text-sm font-medium text-success">Actif</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
+                    Compte
+                  </div>
+                  <div className="text-sm text-foreground break-all mb-3">{result?.email}</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-widest mb-1">
+                    Moyen de paiement
+                  </div>
+                  <div className="text-sm text-foreground">
+                    {result ? (PROVIDER_LABEL[result.provider] ?? result.provider) : '—'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {result?.isNewAccount ? (
               <>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Votre compte MekaSoft vient d&apos;être créé. Il ne reste qu&apos;une étape :
-                  ouvrez l&apos;email envoyé à{' '}
-                  <strong className="text-foreground">{result.email}</strong> pour définir votre mot
-                  de passe et accéder à votre espace.
-                </p>
+                <div className="bg-secondary rounded-lg p-6 text-left mb-6">
+                  <h3 className="font-semibold text-secondary-foreground mb-2 text-sm">
+                    Dernière étape
+                  </h3>
+                  <p className="text-sm text-secondary-foreground/80">
+                    Ouvrez l&apos;email envoyé à{' '}
+                    <strong className="text-secondary-foreground">{result.email}</strong> pour
+                    définir votre mot de passe et accéder à votre espace.
+                  </p>
+                </div>
                 <Link href="/login">
                   <Button variant="outline" className="w-full">
                     J&apos;ai défini mon mot de passe — Se connecter

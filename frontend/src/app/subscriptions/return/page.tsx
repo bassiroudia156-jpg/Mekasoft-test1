@@ -23,6 +23,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
+import { fireSuccessConfetti } from '@/lib/confetti';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 
@@ -96,6 +97,7 @@ function ReturnBody() {
         });
         if (res.status === 'SUCCEEDED') {
           setState('succeeded');
+          fireSuccessConfetti();
           return;
         }
         if (res.status === 'FAILED') {
