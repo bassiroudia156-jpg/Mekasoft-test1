@@ -10,6 +10,7 @@ import { useUser } from '@/contexts/AuthContext';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
 import ClientRow from '@/components/clients/ClientRow';
+import { SkeletonClientRow } from '@/components/ui/Skeleton';
 import PageHeader from '@/components/ui/PageHeader';
 import FilterButton from '@/components/ui/FilterButton';
 import Button from '@/components/ui/Button';
@@ -187,7 +188,7 @@ export default function ClientsPage() {
 
               <div className="flex-1 min-w-[820px]">
                 {loading ? (
-                  <p className="text-sm text-muted-foreground p-5">Chargement…</p>
+                  Array.from({ length: 6 }).map((_, i) => <SkeletonClientRow key={i} />)
                 ) : error ? (
                   <p role="alert" className="text-sm text-warning p-5">
                     {error}

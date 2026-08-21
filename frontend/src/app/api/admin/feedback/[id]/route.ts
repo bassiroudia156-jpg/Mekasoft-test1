@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAdmin } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
+import { logAdminAction } from '@/lib/server/admin/audit';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
@@ -36,19 +37,34 @@ export async function PATCH(
       );
     }
 
-    const updated = await prisma.feedback
-      .update({ where: { id }, data: { reviewed: parsed.data.reviewed } })
-      .catch(() => null);
-    if (!updated) {
+    const existing = await prisma.feedback.findUnique({ where: { id } });
+    if (!existing) {
       return NextResponse.json(
         { error: 'FEEDBACK_NOT_FOUND' },
         { status: 404, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    // No AdminAction here — deliberately: toggling a triage checkbox on
-    // one-way feedback isn't a "mutation with stakes" the way role/status/
-    // plan/coupon/pricing changes are (T-03-06-08-style noise avoidance,
-    // same reasoning the status route already applies to same-status PATCH).
+
+    // 2026-08-21 audit pass: every back-office write must go through
+    // logAdminAction per CLAUDE.md ("every back-office write is auditable —
+    // skipping it is a compliance regression"), including this triage
+    // toggle — kept inside the same tx as the update itself, same pattern
+    // as the sibling support-tickets PATCH route.
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.feedback.update({
+        where: { id },
+        data: { reviewed: parsed.data.reviewed },
+      });
+      await logAdminAction(tx, {
+        actorId: auth.admin.id,
+        action: 'feedback.update',
+        targetType: 'Feedback',
+        targetId: id,
+        metadata: { from: existing.reviewed, to: parsed.data.reviewed },
+      });
+      return row;
+    });
+
     return NextResponse.json(
       { feedback: updated },
       { status: 200, headers: { 'x-request-id': ctx.requestId } },

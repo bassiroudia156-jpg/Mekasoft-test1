@@ -56,7 +56,7 @@ export async function PATCH(
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'VALIDATION_FAILED', message: 'Invalid request body' },
-        { status: 400 },
+        { status: 400, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
 
@@ -118,7 +118,7 @@ export async function PATCH(
     if (result.kind === 'NOT_FOUND') {
       return NextResponse.json(
         { error: 'USER_NOT_FOUND', message: 'User not found' },
-        { status: 404 },
+        { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
     if (result.kind === 'RESTORE_REQUIRES_SUPERADMIN') {
@@ -127,7 +127,7 @@ export async function PATCH(
           error: 'RESTORE_REQUIRES_SUPERADMIN',
           message: 'Only a SUPERADMIN can restore a suspended account.',
         },
-        { status: 403 },
+        { status: 403, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
     if (result.kind === 'SUSPEND_REQUIRES_SUPERADMIN') {
@@ -136,9 +136,12 @@ export async function PATCH(
           error: 'SUSPEND_REQUIRES_SUPERADMIN',
           message: 'Only a SUPERADMIN can suspend a SUPERADMIN account.',
         },
-        { status: 403 },
+        { status: 403, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
-    return NextResponse.json({ user: result.user }, { status: 200 });
+    return NextResponse.json(
+      { user: result.user },
+      { status: 200, headers: { 'x-request-id': reqCtx.requestId } },
+    );
   });
 }

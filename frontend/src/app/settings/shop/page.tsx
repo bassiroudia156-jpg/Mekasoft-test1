@@ -24,6 +24,7 @@ import Field from '@/components/ui/Field';
 import PhoneField from '@/components/ui/PhoneField';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
+import { SkeletonForm } from '@/components/ui/Skeleton';
 
 interface OrgDetail {
   id: string;
@@ -186,7 +187,7 @@ export default function EditShopSettingsPage() {
 
         <div className="flex-1 p-6">
           {loading ? (
-            <p className="text-sm text-muted-foreground">Chargement…</p>
+            <SkeletonForm fields={6} />
           ) : (
             <form onSubmit={onSubmit} className="flex flex-col gap-6 max-w-2xl lg:mx-auto">
               <FormSection title="Image de marque">

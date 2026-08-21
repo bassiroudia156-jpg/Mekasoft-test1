@@ -20,6 +20,7 @@ import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
+import { SkeletonPaymentRow } from '@/components/ui/Skeleton';
 import PaymentRow, {
   type PaymentStatus,
   type PaymentMethod,
@@ -305,7 +306,7 @@ function PaymentsListBody() {
 
               <div className="min-w-[900px]">
                 {loading ? (
-                  <p className="text-sm text-muted-foreground p-5">Chargement…</p>
+                  Array.from({ length: 6 }).map((_, i) => <SkeletonPaymentRow key={i} />)
                 ) : error ? (
                   <p role="alert" className="text-sm text-warning p-5">
                     {error}

@@ -26,6 +26,7 @@ import AddPartForm, { type NewPart } from '@/components/interventions/AddPartFor
 import PartsRow from '@/components/interventions/PartsRow';
 import Switch from '@/components/ui/Switch';
 import { type InterventionStatus } from '@/components/interventions/InterventionRow';
+import { SkeletonDocument } from '@/components/ui/Skeleton';
 
 interface InterventionPart {
   id: string;
@@ -307,7 +308,9 @@ export default function InterventionDetailPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground p-6">Chargement…</p>
+          <div className="flex-1 overflow-y-auto">
+            <SkeletonDocument />
+          </div>
         ) : error ? (
           <p className="text-sm text-warning p-6">{error}</p>
         ) : (

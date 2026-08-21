@@ -17,7 +17,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import AdminTopBar from '@/components/admin/AdminTopBar';
-import { SkeletonTable } from '@/components/ui/Skeleton';
+import { SkeletonTable, Skeleton, SkeletonInfoCard } from '@/components/ui/Skeleton';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import SlideOver from '@/components/ui/SlideOver';
@@ -245,8 +245,17 @@ export default function AdminUsersPage() {
       <SlideOver open={Boolean(selected) || detailLoading} onClose={() => setSelected(null)}>
         <div className="p-6 flex flex-col gap-5">
           {detailLoading || !selected ? (
-            <div className="flex items-center justify-center py-12">
-              <Icon i="loader-circle" size={24} className="animate-spin text-primary" />
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-4 w-4" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-3 w-48" />
+              </div>
+              <SkeletonInfoCard rows={3} />
             </div>
           ) : (
             <>

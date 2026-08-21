@@ -27,6 +27,12 @@ import UserAvatar from '@/components/ui/UserAvatar';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import Icon from '@/components/ui/Icon';
+import {
+  SkeletonProfileCard,
+  SkeletonInfoCard,
+  SkeletonVehicleRow,
+  SkeletonInterventionRow,
+} from '@/components/ui/Skeleton';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
 
 interface ClientDetail {
@@ -228,7 +234,24 @@ export default function ClientProfilePage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground p-6">Chargement…</p>
+          <div className="p-6 flex flex-col lg:flex-row gap-6">
+            <div className="w-full lg:w-72 flex flex-col gap-4 shrink-0">
+              <SkeletonProfileCard />
+            </div>
+            <div className="flex-1 flex flex-col gap-4 min-w-0">
+              <SkeletonInfoCard rows={3} />
+              <div className="bg-surface border border-border rounded-md overflow-hidden">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <SkeletonVehicleRow key={i} />
+                ))}
+              </div>
+              <div className="bg-surface border border-border rounded-md overflow-hidden">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <SkeletonInterventionRow key={i} />
+                ))}
+              </div>
+            </div>
+          </div>
         ) : error ? (
           <p className="text-sm text-warning p-6">{error}</p>
         ) : (

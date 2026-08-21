@@ -17,6 +17,7 @@ import EditVehicleModal from '@/components/vehicles/EditVehicleModal';
 import DeleteVehicleModal, {
   type DeleteVehicleModalTarget,
 } from '@/components/vehicles/DeleteVehicleModal';
+import { SkeletonVehicleRow } from '@/components/ui/Skeleton';
 import PageHeader from '@/components/ui/PageHeader';
 import FilterButton from '@/components/ui/FilterButton';
 import Button from '@/components/ui/Button';
@@ -272,7 +273,7 @@ export default function VehiclesPage() {
 
               <div className="flex-1 min-w-[860px]">
                 {loading ? (
-                  <p className="text-sm text-muted-foreground p-5">Chargement…</p>
+                  Array.from({ length: 6 }).map((_, i) => <SkeletonVehicleRow key={i} />)
                 ) : error ? (
                   <p role="alert" className="text-sm text-warning p-5">
                     {error}

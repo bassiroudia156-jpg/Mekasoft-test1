@@ -11,7 +11,6 @@ import { api } from '@/lib/api';
 import AdminTopBar from '@/components/admin/AdminTopBar';
 import StatCard from '@/components/dashboard/StatCard';
 import { SkeletonStatCard, Skeleton } from '@/components/ui/Skeleton';
-import Icon from '@/components/ui/Icon';
 
 interface DashboardData {
   kpis: {
@@ -223,13 +222,6 @@ export default function AdminDashboardPage() {
             </div>
           )}
         </div>
-
-        {!data && !error && (
-          <div className="flex items-center justify-center text-muted-foreground text-xs gap-2">
-            <Icon i="loader-circle" size={14} className="animate-spin" />
-            Chargement…
-          </div>
-        )}
       </div>
     </>
   );

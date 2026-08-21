@@ -24,6 +24,7 @@ import ExportMenu from '@/components/dashboard/ExportMenu';
 import InterventionRow, {
   type InterventionStatus,
 } from '@/components/interventions/InterventionRow';
+import { SkeletonStatCard, SkeletonChart, SkeletonInterventionRow } from '@/components/ui/Skeleton';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import Field from '@/components/ui/Field';
@@ -340,7 +341,6 @@ export default function DashboardPage() {
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar
           onNewIntervention={() => router.push('/interventions/new')}
-          showUpgrade={!!organizationId && orgPlan === 'FREE'}
           rightSlot={<ExportMenu plan={orgPlan} />}
         />
 
@@ -410,56 +410,71 @@ export default function DashboardPage() {
 
           {/* KPI Row */}
           <div className="flex flex-col sm:flex-row gap-4">
-            <StatCard
-              label="En cours"
-              value={organizationId ? (stats?.inProgress ?? 0) : 0}
-              sub="interventions actives"
-              status="warning"
-              icon="wrench"
-            />
-            <StatCard
-              label="Non payé"
-              value={organizationId ? (stats?.unpaid ?? 0) : 0}
-              sub="à encaisser"
-              status="accent"
-              icon="banknote"
-            />
-            <StatCard
-              label="Terminé ce mois"
-              value={organizationId ? (stats?.completedThisMonth ?? 0) : 0}
-              sub="interventions clôturées"
-              status="success"
-              icon="circle-check"
-            />
-            <StatCard
-              label="Recettes du mois"
-              value={organizationId && hasData ? (stats?.revenueThisMonth ?? 0) : '—'}
-              sub="FCFA encaissés"
-              status="default"
-              icon="trending-up"
-            />
+            {loadingStats ? (
+              <>
+                <SkeletonStatCard />
+                <SkeletonStatCard />
+                <SkeletonStatCard />
+                <SkeletonStatCard />
+              </>
+            ) : (
+              <>
+                <StatCard
+                  label="En cours"
+                  value={organizationId ? (stats?.inProgress ?? 0) : 0}
+                  sub="interventions actives"
+                  status="warning"
+                  icon="wrench"
+                />
+                <StatCard
+                  label="Non payé"
+                  value={organizationId ? (stats?.unpaid ?? 0) : 0}
+                  sub="à encaisser"
+                  status="accent"
+                  icon="banknote"
+                />
+                <StatCard
+                  label="Terminé ce mois"
+                  value={organizationId ? (stats?.completedThisMonth ?? 0) : 0}
+                  sub="interventions clôturées"
+                  status="success"
+                  icon="circle-check"
+                />
+                <StatCard
+                  label="Recettes du mois"
+                  value={organizationId && hasData ? (stats?.revenueThisMonth ?? 0) : '—'}
+                  sub="FCFA encaissés"
+                  status="default"
+                  icon="trending-up"
+                />
+              </>
+            )}
           </div>
 
           {/* Middle row: chart + quick actions */}
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
-              <RevenueChart
-                total={stats?.revenueChart.total ?? 0}
-                bars={
-                  organizationId
-                    ? (stats?.revenueChart.bars ?? []).map((b) => ({
-                        day: b.day,
-                        value: b.value,
-                        amount: formatCompactAmount(b.amount),
-                      }))
-                    : []
-                }
-                {...(stats?.revenueChart.trendPct != null
-                  ? {
-                      trendLabel: `${stats.revenueChart.trendPct >= 0 ? '+' : ''}${stats.revenueChart.trendPct}% vs sem. passée`,
-                    }
-                  : {})}
-              />
+              {loadingStats ? (
+                <SkeletonChart />
+              ) : (
+                <RevenueChart
+                  total={stats?.revenueChart.total ?? 0}
+                  bars={
+                    organizationId
+                      ? (stats?.revenueChart.bars ?? []).map((b) => ({
+                          day: b.day,
+                          value: b.value,
+                          amount: formatCompactAmount(b.amount),
+                        }))
+                      : []
+                  }
+                  {...(stats?.revenueChart.trendPct != null
+                    ? {
+                        trendLabel: `${stats.revenueChart.trendPct >= 0 ? '+' : ''}${stats.revenueChart.trendPct}% vs sem. passée`,
+                      }
+                    : {})}
+                />
+              )}
             </div>
             <div className="w-full lg:w-56">
               <QuickActions
@@ -479,8 +494,11 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {!organizationId || !hasData ? (
-            /* Empty state — no interventions yet (or no garage yet) */
+          {!organizationId || (!loadingStats && !hasData) ? (
+            /* Empty state — no interventions yet (or no garage yet). While
+               stats are still loading (loadingStats) we fall through to the
+               table branch instead, so the intervention list's own skeleton
+               rows show rather than briefly flashing this empty state. */
             <div className="bg-surface border border-border rounded-md p-12 flex flex-col items-center text-center">
               <div className="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mb-5">
                 <Icon i="inbox" size={28} className="text-primary" />
@@ -617,8 +635,8 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="min-w-[900px]">
-                  {listLoading ? (
-                    <p className="text-sm text-muted-foreground p-5">Chargement…</p>
+                  {listLoading || loadingStats ? (
+                    Array.from({ length: 5 }).map((_, i) => <SkeletonInterventionRow key={i} />)
                   ) : noFilterResults ? (
                     <div className="p-8 text-center">
                       <p className="text-sm text-muted-foreground mb-3">

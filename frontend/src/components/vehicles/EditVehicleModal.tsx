@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import Field from '@/components/ui/Field';
 import Button from '@/components/ui/Button';
+import { SkeletonForm } from '@/components/ui/Skeleton';
 
 export interface EditVehicleModalSavedPayload {
   id: string;
@@ -136,7 +137,7 @@ export default function EditVehicleModal({ vehicleId, onClose, onSaved }: EditVe
   }
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground py-6 text-center">Chargement…</p>;
+    return <SkeletonForm fields={4} />;
   }
 
   if (loadError) {

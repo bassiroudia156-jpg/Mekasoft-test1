@@ -12,6 +12,7 @@ import { useUser } from '@/contexts/AuthContext';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import { formatInterventionDate } from '@/lib/format-intervention-date';
 import Sidebar from '@/components/layout/Sidebar';
+import { SkeletonInterventionRow } from '@/components/ui/Skeleton';
 import InterventionRow, {
   type InterventionStatus,
 } from '@/components/interventions/InterventionRow';
@@ -204,7 +205,7 @@ export default function InterventionsPage() {
 
               <div className="flex-1 min-w-[900px]">
                 {loading ? (
-                  <p className="text-sm text-muted-foreground p-5">Chargement…</p>
+                  Array.from({ length: 6 }).map((_, i) => <SkeletonInterventionRow key={i} />)
                 ) : error ? (
                   <p role="alert" className="text-sm text-warning p-5">
                     {error}

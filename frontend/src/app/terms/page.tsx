@@ -4,7 +4,19 @@
 // shared PublicNav (see .planning/banani/landing-legal-pages.md). Banani's
 // own screen stops at a one-line copyright — no full marketing footer is
 // shown here, respected exactly rather than padding it out.
+import type { Metadata } from 'next';
 import PublicNav from '@/components/marketing/PublicNav';
+
+// Overrides layout.tsx's blanket `robots: { index: false }` — one of only
+// 3 Server Components in src/app/ (see proxy.ts's header comment for
+// why every other route stays noindexed by default).
+export const metadata: Metadata = {
+  title: "Conditions d'utilisation",
+  description:
+    "Conditions d'utilisation de MekaSoft — licence, comptes, paiements et responsabilités.",
+  alternates: { canonical: '/terms' },
+  robots: { index: true, follow: true },
+};
 
 const SECTIONS = [
   {

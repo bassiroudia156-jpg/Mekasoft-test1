@@ -15,6 +15,7 @@
 // it fired within seconds of landing here and made the page impossible to
 // actually review — always renders the marketing page now regardless of
 // auth state, matching how /login already behaves.
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import BrandLogo from '@/components/ui/BrandLogo';
 import Icon from '@/components/ui/Icon';
@@ -170,9 +171,66 @@ const FAQS = [
   },
 ];
 
+// Overrides layout.tsx's blanket `robots: { index: false }` — this is one
+// of only 3 Server Components in src/app/ (see proxy.ts's header
+// comment), the only place in the whole app it's safe to actually index.
+// No `title` set here on purpose: omitting it inherits layout.tsx's
+// `metadata.title.default` verbatim (the un-templated brand+tagline
+// string) rather than running it through the `%s | MekaSoft` template
+// every other indexed... route would use.
+export const metadata: Metadata = {
+  description:
+    'Mekasoft centralise clients, véhicules, réparations, devis, factures et paiements pour votre garage automobile. Plan Gratuit à vie, Premium à 9 900 FCFA/mois — essai sans carte bancaire.',
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true },
+  openGraph: { url: '/' },
+};
+
+// Structured data (2026-08-20 SEO pass) — generated from the same consts
+// the visible page renders (FAQS, PLAN pricing below) rather than a second
+// hand-written copy, so the JSON-LD can never drift out of sync with what a
+// visitor actually sees (a mismatch between the two is exactly what
+// Google's structured-data guidelines flag as spam).
+const ORGANIZATION_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'MekaSoft',
+  description:
+    'Logiciel de gestion pour garages automobiles — clients, véhicules, réparations, devis, factures et paiements.',
+  logo: '/brand/logo-dark.svg',
+};
+
+const SOFTWARE_APPLICATION_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'MekaSoft',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  offers: [
+    { '@type': 'Offer', name: 'Gratuit', price: '0', priceCurrency: 'XOF' },
+    { '@type': 'Offer', name: 'Premium', price: '9900', priceCurrency: 'XOF' },
+  ],
+};
+
+const FAQ_JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQS.map((f) => ({
+    '@type': 'Question',
+    name: f.q,
+    acceptedAnswer: { '@type': 'Answer', text: f.a },
+  })),
+};
+
 export default function LandingPage() {
   return (
     <div className="bg-background font-body">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify([ORGANIZATION_JSON_LD, SOFTWARE_APPLICATION_JSON_LD, FAQ_JSON_LD]),
+        }}
+      />
       <PublicNav />
 
       {/* HERO */}
@@ -524,9 +582,6 @@ export default function LandingPage() {
                 </p>
                 <div className="mb-4 lg:mb-6">
                   <div className="flex items-baseline gap-2 whitespace-nowrap">
-                    <span className="text-sm lg:text-base text-background/40 line-through">
-                      12 000
-                    </span>
                     <span className="text-2xl lg:text-4xl font-bold text-background">9 900</span>
                   </div>
                   <span className="text-xs lg:text-sm text-background/60">

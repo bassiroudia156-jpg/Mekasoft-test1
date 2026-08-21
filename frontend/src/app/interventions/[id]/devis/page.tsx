@@ -21,6 +21,7 @@ import { useMobileSidebar } from '@/contexts/MobileSidebarContext';
 import Sidebar from '@/components/layout/Sidebar';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
+import { SkeletonDocument } from '@/components/ui/Skeleton';
 
 interface DevisData {
   reference: string;
@@ -126,7 +127,9 @@ export default function InterventionDevisPage() {
         </div>
 
         {loading ? (
-          <p className="print-hide text-sm text-muted-foreground p-6">Chargement…</p>
+          <div className="print-hide flex-1 overflow-y-auto">
+            <SkeletonDocument />
+          </div>
         ) : error ? (
           <p className="print-hide text-sm text-warning p-6">{error}</p>
         ) : (

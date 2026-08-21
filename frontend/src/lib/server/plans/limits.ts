@@ -113,7 +113,14 @@ export interface PlanPricing {
 
 // "Premium" is a display-only rename of PRO (2026-08-20) — see the header
 // comment for why the internal identifier stayed `'PRO'`.
+//
+// 2026-08-21: dropped the struck-through "12 000" before-price on PRO per
+// explicit user request — it was a permanent fake-discount anchor with no
+// real "before" price behind it (no promo ever charged 12 000). The
+// strikethrough UI itself stays fully wired for the *real* discount case
+// (an admin-set originalPriceFcfa here, or a coupon via
+// /api/coupons/validate) — only this specific always-on illusion is gone.
 export const PLAN_PRICING: Record<Plan, PlanPricing> = {
   FREE: { label: 'Gratuit', priceFcfa: 0, originalPriceFcfa: null },
-  PRO: { label: 'Premium', priceFcfa: 9_900, originalPriceFcfa: 12_000 },
+  PRO: { label: 'Premium', priceFcfa: 9_900, originalPriceFcfa: null },
 };

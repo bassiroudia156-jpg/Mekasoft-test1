@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import Icon from '@/components/ui/Icon';
 import Button from '@/components/ui/Button';
 import { useMobileSidebar } from '@/contexts/MobileSidebarContext';
@@ -8,13 +7,6 @@ export interface TopBarProps {
   /** Greeting/context line — Banani mocked "Tableau de bord" as a static label; kept as a prop so each page can set its own. */
   title?: string;
   onNewIntervention?: () => void;
-  /** Small "Upgrader" pill linking to /subscriptions/plans — caller decides
-   * visibility (dashboard only shows it while the org is still on FREE;
-   * PRO/"Premium" is the only paid tier since BUSINESS retired 2026-08-20 —
-   * see lib/server/plans/limits.ts's header comment). Deliberately a quiet
-   * outline pill, not another filled CTA competing with "Nouvelle
-   * intervention" — see 2026-08-19 dashboard upgrade request. */
-  showUpgrade?: boolean;
   /** Rendered in the slot that used to hold the free-text search box (right
    * of "Nouvelle intervention", wraps to its own full-width row on mobile).
    * 2026-08-19: the dashboard's search input was retired in favor of this —
@@ -42,7 +34,6 @@ function todayFr(): string {
 export default function TopBar({
   title = 'Tableau de bord',
   onNewIntervention,
-  showUpgrade = false,
   rightSlot,
 }: TopBarProps) {
   const { toggle } = useMobileSidebar();
@@ -67,18 +58,6 @@ export default function TopBar({
           {title}
         </div>
       </div>
-
-      {/* Upgrade pill — quiet outline, not competing with the accent CTA below */}
-      {showUpgrade && (
-        <Link
-          href="/subscriptions/plans"
-          aria-label="Upgrader mon abonnement"
-          className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors shrink-0"
-        >
-          <Icon i="zap" size={12} />
-          Upgrader
-        </Link>
-      )}
 
       {/* New intervention CTA */}
       <Button variant="accent" size="md" onClick={onNewIntervention} className="shrink-0">

@@ -14,6 +14,7 @@ import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
 import InvoiceRow, { type InvoiceStatus } from '@/components/invoices/InvoiceRow';
 import ResendInvoiceModal from '@/components/invoices/ResendInvoiceModal';
+import { SkeletonInvoiceRow } from '@/components/ui/Skeleton';
 import PageHeader from '@/components/ui/PageHeader';
 import FilterButton from '@/components/ui/FilterButton';
 import Button from '@/components/ui/Button';
@@ -238,7 +239,7 @@ function InvoicesListBody() {
 
               <div className="flex-1 min-w-[880px]">
                 {loading ? (
-                  <p className="text-sm text-muted-foreground p-5">Chargement…</p>
+                  Array.from({ length: 6 }).map((_, i) => <SkeletonInvoiceRow key={i} />)
                 ) : error ? (
                   <p role="alert" className="text-sm text-warning p-5">
                     {error}

@@ -38,9 +38,13 @@ describe('plans/limits', () => {
     expect(Object.values(PLAN_LIMITS.FREE.features).every((v) => v === false)).toBe(true);
   });
 
-  it('pricing: PRO shows a struck-through original price and the "Premium" display label, FREE does not', () => {
+  it('pricing: PRO shows the "Premium" display label, neither plan has a fake struck-through price', () => {
+    // 2026-08-21: the permanent "12 000 → 9 900" anchor was removed per user
+    // request — a struck-through price should only ever come from a real
+    // admin discount (PlanPricing DB override) or an applied coupon, never
+    // as a default.
     expect(PLAN_PRICING.FREE.originalPriceFcfa).toBeNull();
-    expect(PLAN_PRICING.PRO.originalPriceFcfa).toBeGreaterThan(PLAN_PRICING.PRO.priceFcfa);
+    expect(PLAN_PRICING.PRO.originalPriceFcfa).toBeNull();
     expect(PLAN_PRICING.PRO.label).toBe('Premium');
   });
 });

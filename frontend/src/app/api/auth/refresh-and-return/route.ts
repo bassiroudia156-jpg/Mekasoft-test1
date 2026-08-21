@@ -2,8 +2,9 @@
 //
 // Browser-friendly silent refresh: bounces the user through a 302 → mints
 // fresh access+refresh+csrf cookies (same flow as POST /api/auth/refresh) →
-// 302s to the validated `next` path. Used by `frontend/middleware.ts` when a
-// protected page is requested with a missing/expired access cookie but a
+// 302s to the validated `next` path. Used by `frontend/proxy.ts` (renamed
+// from middleware.ts, 2026-08-20 — see that file's own header comment) when
+// a protected page is requested with a missing/expired access cookie but a
 // still-valid refresh cookie.
 //
 // Why a separate route instead of fetching POST /refresh from middleware?

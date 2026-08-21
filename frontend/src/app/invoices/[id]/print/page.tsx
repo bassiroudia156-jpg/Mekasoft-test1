@@ -16,6 +16,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import InvoiceDocument, { type InvoiceDocumentData } from '@/components/invoices/InvoiceDocument';
+import { SkeletonDocument } from '@/components/ui/Skeleton';
 
 export default function InvoicePrintPage() {
   const user = useUser();
@@ -108,7 +109,9 @@ export default function InvoicePrintPage() {
         </div>
 
         {loading ? (
-          <p className="print-hide text-sm text-muted-foreground p-6">Chargement…</p>
+          <div className="print-hide flex-1 overflow-y-auto">
+            <SkeletonDocument />
+          </div>
         ) : error ? (
           <p className="print-hide text-sm text-warning p-6">{error}</p>
         ) : (

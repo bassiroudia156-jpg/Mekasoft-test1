@@ -26,6 +26,7 @@ import { useUser } from '@/contexts/AuthContext';
 import { fireSuccessConfetti } from '@/lib/confetti';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
+import { SkeletonProcessing } from '@/components/ui/Skeleton';
 
 type PollState = 'checking' | 'succeeded' | 'failed' | 'timeout' | 'missing_payment';
 
@@ -147,9 +148,7 @@ function ReturnBody() {
       <div className={`w-full ${cardMaxWidth} text-center`}>
         {state === 'checking' && (
           <>
-            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-              <Icon i="loader-circle" size={26} className="animate-spin text-primary" />
-            </div>
+            <SkeletonProcessing />
             <h1 className="text-xl font-bold font-headings text-foreground mb-2">
               Vérification du paiement…
             </h1>

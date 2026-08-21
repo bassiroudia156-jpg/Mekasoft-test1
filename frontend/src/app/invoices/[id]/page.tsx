@@ -22,6 +22,7 @@ import Icon from '@/components/ui/Icon';
 import InvoiceDocument from '@/components/invoices/InvoiceDocument';
 import ResendInvoiceModal from '@/components/invoices/ResendInvoiceModal';
 import { type InvoiceStatus } from '@/components/invoices/InvoiceRow';
+import { SkeletonDocument } from '@/components/ui/Skeleton';
 
 interface InvoiceDetail {
   id: string;
@@ -216,7 +217,9 @@ export default function InvoiceDetailPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground p-6">Chargement…</p>
+          <div className="flex-1 overflow-y-auto">
+            <SkeletonDocument />
+          </div>
         ) : error ? (
           <p className="text-sm text-warning p-6">{error}</p>
         ) : (

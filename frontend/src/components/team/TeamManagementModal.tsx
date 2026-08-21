@@ -8,6 +8,7 @@ import Field from '@/components/ui/Field';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import UserAvatar from '@/components/ui/UserAvatar';
+import { SkeletonMemberRow } from '@/components/ui/Skeleton';
 
 // Multi-view modal covering Banani's TeamManagementModal (list) →
 // AddTeamMemberModal (add) → TeamMemberInvitationSent (sent), one
@@ -202,7 +203,11 @@ export default function TeamManagementModal({
           </div>
 
           {loading ? (
-            <p className="text-sm text-muted-foreground">Chargement…</p>
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <SkeletonMemberRow key={i} />
+              ))}
+            </div>
           ) : (
             <div className="space-y-3">
               {members.map((m) => (

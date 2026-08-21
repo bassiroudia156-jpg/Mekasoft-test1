@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Icon from '@/components/ui/Icon';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 export interface ExportMenuProps {
   /** FREE | PRO ("Premium") — null while the org/plan is still loading. */
@@ -75,7 +76,7 @@ export default function ExportMenu({ plan }: ExportMenuProps) {
               Recettes, interventions, nouveaux clients et meilleurs clients du mois, en PDF.
             </p>
             {isLoading ? (
-              <p className="text-xs text-muted-foreground">Chargement…</p>
+              <Skeleton className="h-6 w-40" />
             ) : isPro ? (
               <a
                 href="/api/reports/monthly/pdf"
@@ -104,7 +105,7 @@ export default function ExportMenu({ plan }: ExportMenuProps) {
               Clients, véhicules, interventions, factures et paiements, en CSV.
             </p>
             {isLoading ? (
-              <p className="text-xs text-muted-foreground">Chargement…</p>
+              <Skeleton className="h-6 w-40" />
             ) : isPro ? (
               <div className="flex flex-wrap gap-1.5">
                 {EXPORT_RESOURCES.map((r) => (

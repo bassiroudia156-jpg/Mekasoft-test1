@@ -68,7 +68,7 @@ const PLANS = [
     label: 'Premium',
     blurb: 'Toutes les fonctionnalités',
     priceFcfa: 9_900,
-    originalPriceFcfa: 12_000,
+    originalPriceFcfa: null as number | null,
     featured: true,
     badge: 'Populaire' as string | null,
     features: [
