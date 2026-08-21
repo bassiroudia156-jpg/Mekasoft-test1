@@ -2,7 +2,7 @@
 // there isn't one yet (examples/frontend-pages/admin/* are unwired
 // references, see CLAUDE.md "headless on purpose"). Same effect as
 // PATCH /api/admin/organizations/[id]/plan, minus the HTTP round-trip.
-// Usage: pnpm exec tsx scripts/set-org-plan.ts <org-slug> <FREE|PRO>
+// Usage: pnpm exec tsx scripts/set-org-plan.ts <org-slug> <FREE|PRO|BUSINESS>
 //
 // Mirrors make-superadmin.ts's shape: idempotent, atomic update + audit
 // row in one $transaction, self-attributed actorId (CLI = shell access

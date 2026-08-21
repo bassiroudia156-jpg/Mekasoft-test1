@@ -15,7 +15,7 @@ interface OrgSummary {
 
 export interface CallerOrganization {
   organizationId: string | null;
-  /** FREE | PRO ("Premium") — 'FREE' while loading/absent so plan-gated UI
+  /** FREE | PRO | BUSINESS — 'FREE' while loading/absent so plan-gated UI
    * fails closed (hidden) rather than briefly flashing a locked feature. */
   plan: string;
   loading: boolean;
@@ -32,8 +32,8 @@ export interface CallerOrganization {
 // current organization" (for ManagerProfilePanel's team section, or to
 // gate a page behind having one at all) shares this instead of
 // re-implementing the GET /api/organizations dance each time. `plan` added
-// 2026-08-18 for plan-gated UI (WhatsApp share, logo upload, exports…) —
-// same single fetch, additive field, existing consumers unaffected.
+// 2026-08-18 for plan-gated UI (logo upload, exports…) — same single fetch,
+// additive field, existing consumers unaffected.
 export function useCallerOrganization(enabled: boolean): CallerOrganization {
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [plan, setPlan] = useState('FREE');

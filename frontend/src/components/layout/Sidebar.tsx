@@ -15,7 +15,7 @@ import LogoutConfirmModal from '@/components/auth/LogoutConfirmModal';
 // Mirrors lib/server/plans/limits.ts's PLAN_PRICING labels — same
 // local-copy convention as profile/page.tsx (that module lives under
 // lib/server/, this is client-rendered display copy).
-const PLAN_LABEL: Record<string, string> = { FREE: 'Gratuit', PRO: 'Premium' };
+const PLAN_LABEL: Record<string, string> = { FREE: 'Gratuit', PRO: 'Pro', BUSINESS: 'Business' };
 
 export type SidebarActiveKey =
   | 'dashboard'
@@ -168,9 +168,11 @@ export default function Sidebar({ active }: SidebarProps) {
             log out from the sidebar itself without an extra navigation.
             Plan row added 2026-08-20, between the two — moved here from the
             dashboard TopBar per user request, and this is now the ONLY
-            upgrade CTA in the app (no duplicate elsewhere): a FREE org sees
-            a quiet reminder + "Upgrader" link on every authenticated page;
-            a PRO/"Premium" org sees its plan confirmed instead, no CTA. */}
+            upgrade CTA in the app (no duplicate elsewhere): FREE and PRO
+            orgs see a quiet reminder + "Upgrader" link (pointing at the
+            full pricing grid, which covers the next tier up either way) on
+            every authenticated page; a BUSINESS org — the top tier — sees
+            its plan confirmed instead, no CTA. */}
         <div className="px-3 pb-4 border-t border-primary-foreground/10 pt-4 flex flex-col gap-1">
           <Link
             href="/profile"
@@ -185,7 +187,7 @@ export default function Sidebar({ active }: SidebarProps) {
           </Link>
 
           {!planLoading &&
-            (plan === 'FREE' ? (
+            (plan !== 'BUSINESS' ? (
               <Link
                 href="/subscriptions/plans"
                 onClick={close}
@@ -194,7 +196,7 @@ export default function Sidebar({ active }: SidebarProps) {
               >
                 <span className="flex items-center gap-1.5 text-primary-foreground/70 text-xs font-medium">
                   <Icon i="zap" size={12} className="text-accent" />
-                  Plan {PLAN_LABEL.FREE}
+                  Plan {PLAN_LABEL[plan] ?? plan}
                 </span>
                 <span className="text-xs font-semibold text-accent">Upgrader</span>
               </Link>

@@ -71,9 +71,7 @@ export default function EditShopSettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canEdit = user?.orgRole === 'OWNER' || user?.orgRole === 'ADMIN';
-  // Single paid plan now (2026-08-20, BUSINESS retired — see
-  // lib/server/plans/limits.ts's header comment).
-  const canBrand = plan === 'PRO';
+  const canBrand = plan === 'PRO' || plan === 'BUSINESS';
 
   // Role/org-membership gate now reads straight off `user` (AuthContext's
   // GET /api/auth/me already returns organizationId/orgRole — see Phase 8)
@@ -232,7 +230,7 @@ export default function EditShopSettingsPage() {
                     <p className="text-xs text-muted-foreground">
                       {canBrand
                         ? 'Affiché sur vos factures PDF. PNG/JPG, fond transparent recommandé.'
-                        : 'Réservé au plan Premium — voir Mon profil > Abonnement.'}
+                        : 'Réservé aux plans Pro et Business — voir Mon profil > Abonnement.'}
                     </p>
                   </div>
                 </div>

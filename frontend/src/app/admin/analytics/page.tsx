@@ -16,6 +16,17 @@ interface AnalyticsData {
   topGarages: { organizationId: string; name: string; plan: string; interventionCount: number }[];
 }
 
+const PLAN_LABEL: Record<string, string> = {
+  FREE: 'Gratuit',
+  PRO: 'Pro',
+  BUSINESS: 'Business',
+};
+const PLAN_BADGE_TONE: Record<string, 'accent' | 'primary' | 'muted'> = {
+  FREE: 'muted',
+  PRO: 'accent',
+  BUSINESS: 'primary',
+};
+
 function MiniBarChart({
   values,
   formatTooltip,
@@ -104,8 +115,8 @@ export default function AdminAnalyticsPage() {
               <div className="flex flex-col gap-3">
                 {data.planDistribution.map((p) => (
                   <div key={p.plan} className="flex items-center justify-between">
-                    <Badge tone={p.plan === 'PRO' ? 'accent' : 'muted'}>
-                      {p.plan === 'PRO' ? 'Premium' : 'Gratuit'}
+                    <Badge tone={PLAN_BADGE_TONE[p.plan] ?? 'muted'}>
+                      {PLAN_LABEL[p.plan] ?? p.plan}
                     </Badge>
                     <span className="text-sm font-medium text-foreground">{p.count} garage(s)</span>
                   </div>

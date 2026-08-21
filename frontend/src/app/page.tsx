@@ -135,17 +135,23 @@ const FREE_FEATURES = [
   { m: 'Suivi des paiements', d: 'Suivi des paiements' },
 ];
 
-// 2026-08-20 — BUSINESS retired, its advantages merged into PRO/"Premium"
-// (see lib/server/plans/limits.ts's header comment): unlimited clients/
-// vehicles/interventions + WhatsApp sharing + invoice logo (former Pro set)
-// plus up to 5 users with roles, monthly report and CSV export (former
-// Business-only set) all now ship on the single paid tier.
+// 2026-08-21 — BUSINESS restored as its own tier (reverting the 2026-08-20
+// "merge into Pro" — see lib/server/plans/limits.ts's header comment). No
+// WhatsApp-share line here: that feature was pulled pending a real
+// implementation, not just relabeled.
 const PRO_FEATURES = [
-  { m: 'Tout illimité', d: 'Clients, véhicules, interventions illimités' },
-  { m: 'Partage WhatsApp', d: 'Partage de factures sur WhatsApp' },
+  { m: 'Clients illimités', d: 'Clients illimités' },
+  { m: 'Véhicules illimités', d: 'Véhicules illimités' },
+  { m: 'Interventions illimitées', d: 'Interventions illimitées' },
   { m: 'Logo sur les factures', d: 'Logo du garage sur les factures' },
-  { m: "Jusqu'à 5 utilisateurs", d: "Jusqu'à 5 utilisateurs avec rôles" },
-  { m: 'Rapport + export', d: 'Rapport mensuel PDF + export CSV' },
+];
+
+const BUSINESS_FEATURES = [
+  { m: 'Tout Pro', d: 'Toutes les fonctions Pro' },
+  { m: "Jusqu'à 5 utilisateurs", d: "Jusqu'à 5 utilisateurs" },
+  { m: 'Rôles & permissions', d: "Rôles & permissions par membre d'équipe" },
+  { m: 'Rapport mensuel', d: "Rapport d'activité mensuel (PDF)" },
+  { m: 'Export de données', d: 'Export de données (CSV)' },
 ];
 
 const FAQS = [
@@ -167,7 +173,7 @@ const FAQS = [
   },
   {
     q: 'Puis-je utiliser Mekasoft gratuitement, sans limite de temps ?',
-    a: "Oui — le plan Gratuit reste gratuit à vie, sans carte bancaire. Il couvre jusqu'à 3 clients, 3 véhicules et 5 interventions par mois. Passez à Premium quand votre garage en a besoin.",
+    a: "Oui — le plan Gratuit reste gratuit à vie, sans carte bancaire. Il couvre jusqu'à 3 clients, 3 véhicules et 5 interventions par mois. Passez à Pro ou Business quand votre garage en a besoin.",
   },
 ];
 
@@ -180,7 +186,7 @@ const FAQS = [
 // every other indexed... route would use.
 export const metadata: Metadata = {
   description:
-    'Mekasoft centralise clients, véhicules, réparations, devis, factures et paiements pour votre garage automobile. Plan Gratuit à vie, Premium à 9 900 FCFA/mois — essai sans carte bancaire.',
+    'Mekasoft centralise clients, véhicules, réparations, devis, factures et paiements pour votre garage automobile. Plan Gratuit à vie, Pro à 9 900 FCFA/mois, Business à 19 900 FCFA/mois — essai sans carte bancaire.',
   alternates: { canonical: '/' },
   robots: { index: true, follow: true },
   openGraph: { url: '/' },
@@ -208,7 +214,8 @@ const SOFTWARE_APPLICATION_JSON_LD = {
   operatingSystem: 'Web',
   offers: [
     { '@type': 'Offer', name: 'Gratuit', price: '0', priceCurrency: 'XOF' },
-    { '@type': 'Offer', name: 'Premium', price: '9900', priceCurrency: 'XOF' },
+    { '@type': 'Offer', name: 'Pro', price: '9900', priceCurrency: 'XOF' },
+    { '@type': 'Offer', name: 'Business', price: '19900', priceCurrency: 'XOF' },
   ],
 };
 
@@ -524,7 +531,7 @@ export default function LandingPage() {
                 </span>
               </p>
             </div>
-            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:gap-6">
+            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3 lg:gap-6">
               {/* Gratuit */}
               <div className="bg-surface border border-border rounded-lg lg:rounded-xl p-5 lg:p-8 flex flex-col">
                 <h3 className="font-bold font-headings text-foreground text-base lg:text-lg mb-1">
@@ -565,20 +572,19 @@ export default function LandingPage() {
                 </Link>
               </div>
 
-              {/* Premium (PRO internally — see lib/server/plans/limits.ts's
-                  header comment) */}
+              {/* Pro */}
               <div className="bg-foreground rounded-lg lg:rounded-xl p-5 lg:p-8 flex flex-col">
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="font-bold font-headings text-background text-base lg:text-lg">
-                    Premium
+                    Pro
                   </h3>
                   <span className="text-xs px-2 py-1 bg-primary text-primary-foreground rounded lg:rounded-full font-medium">
                     Populaire
                   </span>
                 </div>
                 <p className="text-xs text-background/60 mb-4 lg:mb-6">
-                  <span className="lg:hidden">Toutes les fonctionnalités</span>
-                  <span className="hidden lg:inline">Toutes les fonctionnalités, sans limite</span>
+                  <span className="lg:hidden">Garages en croissance</span>
+                  <span className="hidden lg:inline">Pour les garages en croissance</span>
                 </p>
                 <div className="mb-4 lg:mb-6">
                   <div className="flex items-baseline gap-2 whitespace-nowrap">
@@ -605,8 +611,54 @@ export default function LandingPage() {
                   ))}
                 </div>
                 <Link
-                  href="/subscriptions/checkout"
+                  href="/subscriptions/checkout?plan=PRO"
                   className="w-full py-2 lg:py-3 bg-primary text-primary-foreground rounded lg:rounded-md text-xs lg:text-sm font-medium text-center hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                >
+                  S&apos;abonner
+                </Link>
+              </div>
+
+              {/* Business */}
+              <div className="bg-surface border border-border rounded-lg lg:rounded-xl p-5 lg:p-8 flex flex-col">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-bold font-headings text-foreground text-base lg:text-lg">
+                    Business
+                  </h3>
+                  <span className="text-xs px-2 py-1 bg-secondary text-secondary-foreground rounded lg:rounded-full font-medium">
+                    Équipes
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4 lg:mb-6">
+                  <span className="lg:hidden">Plusieurs garagistes</span>
+                  <span className="hidden lg:inline">Pour les ateliers avec une équipe</span>
+                </p>
+                <div className="mb-4 lg:mb-6">
+                  <div className="flex items-baseline gap-2 whitespace-nowrap">
+                    <span className="text-2xl lg:text-4xl font-bold text-foreground">19 900</span>
+                  </div>
+                  <span className="text-xs lg:text-sm text-muted-foreground">
+                    <span className="lg:hidden">FCFA/mois</span>
+                    <span className="hidden lg:inline">FCFA / mois</span>
+                  </span>
+                </div>
+                <div className="space-y-2 lg:space-y-3 mb-5 lg:mb-8 flex-1">
+                  {BUSINESS_FEATURES.map((f) => (
+                    <div key={f.d} className="flex items-center gap-2">
+                      <Icon
+                        i="check"
+                        size={13}
+                        className="text-primary flex-shrink-0 w-[11px] h-[11px] lg:w-[13px] lg:h-[13px]"
+                      />
+                      <span className="text-xs lg:text-sm text-foreground">
+                        <span className="lg:hidden">{f.m}</span>
+                        <span className="hidden lg:inline">{f.d}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <Link
+                  href="/subscriptions/checkout?plan=BUSINESS"
+                  className="w-full py-2 lg:py-3 border border-primary text-primary rounded lg:rounded-md text-xs lg:text-sm font-medium text-center hover:bg-primary/5 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
                 >
                   S&apos;abonner
                 </Link>

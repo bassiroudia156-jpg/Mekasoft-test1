@@ -3,16 +3,11 @@
 // card, Stripe re-charges automatically every period, no relance needed.
 //
 // Uses hosted Checkout in `mode: 'subscription'` against a pre-created
-// Stripe Price (STRIPE_PRICE_ID_PRO) rather than inline `price_data` — same
-// "price lives in the provider's own dashboard, keep it in sync with our
-// own pricing" constraint Chariow.md documents for Chariow products (§6
-// "Pas d'override de prix"). The admin must keep that Stripe Price's amount
-// equal to PLAN_PRICING.PRO.priceFcfa in lib/server/plans/limits.ts.
-//
-// 2026-08-20: STRIPE_PRICE_ID_BUSINESS retired along with the BUSINESS plan
-// itself (see limits.ts's header comment) — PRO/"Premium" kept its existing
-// price and Stripe Price object unchanged, so no Stripe-dashboard action was
-// needed here.
+// Stripe Price (STRIPE_PRICE_ID_PRO/BUSINESS) rather than inline `price_data`
+// — same "price lives in the provider's own dashboard, keep it in sync with
+// our own pricing" constraint Chariow.md documents for Chariow products
+// (§6 "Pas d'override de prix"). The admin must keep each Stripe Price's
+// amount equal to PLAN_PRICING[plan].priceFcfa in lib/server/plans/limits.ts.
 //
 // Activation deliberately hinges on `invoice.paid` (not
 // `checkout.session.completed`) for BOTH initial creation and renewals —
@@ -38,11 +33,9 @@ const log = createLogger();
 // default at install time (node_modules/stripe/esm/apiVersion.js).
 const STRIPE_API_VERSION = '2026-07-29.dahlia' as const;
 
-// `plan` param kept (even though there's only one valid value now) for
-// signature symmetry with chariow.ts's productIdForPlan/moneroo's
-// equivalent lookup — same shape across all 3 provider adapters.
-function priceIdForPlan(plan: 'PRO'): string | null {
-  const id = plan === 'PRO' ? process.env.STRIPE_PRICE_ID_PRO : undefined;
+function priceIdForPlan(plan: 'PRO' | 'BUSINESS'): string | null {
+  const id =
+    plan === 'PRO' ? process.env.STRIPE_PRICE_ID_PRO : process.env.STRIPE_PRICE_ID_BUSINESS;
   return id && id.length > 0 ? id : null;
 }
 
@@ -50,7 +43,8 @@ function isConfigured(): boolean {
   return !!(
     process.env.STRIPE_SECRET_KEY &&
     process.env.STRIPE_WEBHOOK_SECRET &&
-    process.env.STRIPE_PRICE_ID_PRO
+    process.env.STRIPE_PRICE_ID_PRO &&
+    process.env.STRIPE_PRICE_ID_BUSINESS
   );
 }
 

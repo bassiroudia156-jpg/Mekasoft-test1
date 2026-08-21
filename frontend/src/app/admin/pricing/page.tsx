@@ -1,9 +1,9 @@
 'use client';
 
 // /admin/pricing — the explicit "modifier le prix de l'abonnement"
-// requirement. Only PRO ("Premium") is editable; FREE is definitionally 0
-// and has no form control here (matches the API's own PLAN_NOT_EDITABLE
-// guard on FREE). Changing the price here immediately affects what
+// requirement. PRO and BUSINESS are editable; FREE is definitionally 0 and
+// has no form control here (matches the API's own PLAN_NOT_EDITABLE guard
+// on FREE). Changing a price here immediately affects what
 // /subscriptions/plans, the landing page, and new checkouts show — see
 // lib/server/plans/pricing.ts's file comment.
 import { useEffect, useState } from 'react';
@@ -21,27 +21,23 @@ interface PlanPricingRow {
   isOverride: boolean;
 }
 
-export default function AdminPricingPage() {
-  const { toast: showToast } = useToast();
-  const [pricing, setPricing] = useState<Record<string, PlanPricingRow> | null>(null);
-  const [priceFcfa, setPriceFcfa] = useState('');
-  const [originalPriceFcfa, setOriginalPriceFcfa] = useState('');
-  const [saving, setSaving] = useState(false);
+const EDITABLE_PLANS = ['PRO', 'BUSINESS'] as const;
 
-  useEffect(() => {
-    api<{ pricing: Record<string, PlanPricingRow> }>('/api/admin/plan-pricing')
-      .then((res) => {
-        setPricing(res.pricing);
-        setPriceFcfa(String(res.pricing.PRO?.priceFcfa ?? ''));
-        setOriginalPriceFcfa(
-          res.pricing.PRO?.originalPriceFcfa != null
-            ? String(res.pricing.PRO.originalPriceFcfa)
-            : '',
-        );
-      })
-      .catch(() => showToast('Impossible de charger la tarification.', 'error'));
-    // Runs once on mount only — showToast is stable from context, no deps needed.
-  }, []);
+function PlanPricingCard({
+  plan,
+  row,
+  onSaved,
+}: {
+  plan: 'PRO' | 'BUSINESS';
+  row: PlanPricingRow;
+  onSaved: (row: PlanPricingRow) => void;
+}) {
+  const { toast: showToast } = useToast();
+  const [priceFcfa, setPriceFcfa] = useState(String(row.priceFcfa));
+  const [originalPriceFcfa, setOriginalPriceFcfa] = useState(
+    row.originalPriceFcfa != null ? String(row.originalPriceFcfa) : '',
+  );
+  const [saving, setSaving] = useState(false);
 
   async function save() {
     const price = Number(priceFcfa);
@@ -58,9 +54,9 @@ export default function AdminPricingPage() {
     try {
       const res = await api<{ pricing: PlanPricingRow }>('/api/admin/plan-pricing', {
         method: 'PATCH',
-        body: { plan: 'PRO', priceFcfa: price, originalPriceFcfa: original },
+        body: { plan, priceFcfa: price, originalPriceFcfa: original },
       });
-      setPricing((prev) => (prev ? { ...prev, PRO: res.pricing } : prev));
+      onSaved(res.pricing);
       showToast('Prix mis à jour.', 'success');
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : 'Échec de la mise à jour.', 'error');
@@ -70,53 +66,82 @@ export default function AdminPricingPage() {
   }
 
   return (
+    <div className="bg-surface border border-border rounded-lg p-6 flex flex-col gap-5">
+      <div>
+        <h2 className="text-base font-bold text-foreground">Forfait {row.label}</h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          Actuellement {row.priceFcfa.toLocaleString('fr-FR')} FCFA/mois
+          {row.originalPriceFcfa
+            ? ` (barré : ${row.originalPriceFcfa.toLocaleString('fr-FR')} FCFA)`
+            : ''}
+          {row.isOverride ? '' : ' — valeur par défaut, jamais modifiée.'}
+        </p>
+      </div>
+
+      <Field
+        label="Prix affiché (FCFA / mois)"
+        name={`priceFcfa-${plan}`}
+        type="number"
+        value={priceFcfa}
+        onChange={setPriceFcfa}
+      />
+
+      <Field
+        label="Prix barré (optionnel — laisser vide pour ne pas en afficher)"
+        name={`originalPriceFcfa-${plan}`}
+        type="number"
+        value={originalPriceFcfa}
+        onChange={setOriginalPriceFcfa}
+      />
+
+      <div className="flex justify-end">
+        <Button variant="primary" disabled={saving} onClick={() => void save()}>
+          {saving ? 'Enregistrement…' : 'Enregistrer'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminPricingPage() {
+  const { toast: showToast } = useToast();
+  const [pricing, setPricing] = useState<Record<string, PlanPricingRow> | null>(null);
+
+  useEffect(() => {
+    api<{ pricing: Record<string, PlanPricingRow> }>('/api/admin/plan-pricing')
+      .then((res) => setPricing(res.pricing))
+      .catch(() => showToast('Impossible de charger la tarification.', 'error'));
+    // Runs once on mount only — showToast is stable from context, no deps needed.
+  }, []);
+
+  return (
     <>
-      <AdminTopBar title="Tarification" subtitle="Prix du forfait Premium" />
-      <div className="p-6 max-w-2xl">
-        <div className="bg-surface border border-border rounded-lg p-6">
-          {!pricing ? (
-            <div className="flex flex-col gap-4">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-5">
-              <div>
-                <h2 className="text-base font-bold text-foreground">Forfait Premium</h2>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Actuellement {pricing.PRO?.priceFcfa.toLocaleString('fr-FR')} FCFA/mois
-                  {pricing.PRO?.originalPriceFcfa
-                    ? ` (barré : ${pricing.PRO.originalPriceFcfa.toLocaleString('fr-FR')} FCFA)`
-                    : ''}
-                  {pricing.PRO?.isOverride ? '' : ' — valeur par défaut, jamais modifiée.'}
-                </p>
+      <AdminTopBar title="Tarification" subtitle="Prix des forfaits Pro et Business" />
+      <div className="p-6 max-w-2xl flex flex-col gap-6">
+        {!pricing
+          ? EDITABLE_PLANS.map((plan) => (
+              <div key={plan} className="bg-surface border border-border rounded-lg p-6">
+                <div className="flex flex-col gap-4">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
               </div>
-
-              <Field
-                label="Prix affiché (FCFA / mois)"
-                name="priceFcfa"
-                type="number"
-                value={priceFcfa}
-                onChange={setPriceFcfa}
-              />
-
-              <Field
-                label="Prix barré (optionnel — laisser vide pour ne pas en afficher)"
-                name="originalPriceFcfa"
-                type="number"
-                value={originalPriceFcfa}
-                onChange={setOriginalPriceFcfa}
-              />
-
-              <div className="flex justify-end">
-                <Button variant="primary" disabled={saving} onClick={() => void save()}>
-                  {saving ? 'Enregistrement…' : 'Enregistrer'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+            ))
+          : EDITABLE_PLANS.map((plan) => {
+              const row = pricing[plan];
+              if (!row) return null;
+              return (
+                <PlanPricingCard
+                  key={plan}
+                  plan={plan}
+                  row={row}
+                  onSaved={(next) =>
+                    setPricing((prev) => (prev ? { ...prev, [plan]: next } : prev))
+                  }
+                />
+              );
+            })}
       </div>
     </>
   );

@@ -31,9 +31,7 @@ interface VerifyResult {
 const POLL_INTERVAL_MS = 2500;
 const MAX_ATTEMPTS = 20; // ~50s, same generosity as /subscriptions/return
 
-// BUSINESS retired 2026-08-20, merged into PRO/"Premium" — see
-// lib/server/plans/limits.ts's header comment.
-const PLAN_LABEL: Record<string, string> = { PRO: 'Premium' };
+const PLAN_LABEL: Record<string, string> = { PRO: 'Pro', BUSINESS: 'Business' };
 // Same copy as /subscriptions/return's PROVIDER_LABEL — kept as a local
 // duplicate rather than a shared import since this page is public (no
 // server-only concerns) but otherwise unrelated to that authenticated page.

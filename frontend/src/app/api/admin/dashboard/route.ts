@@ -37,16 +37,20 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       totalUsers,
       activeUsers,
       proOrgCount,
+      businessOrgCount,
       totalOrgCount,
       proPricing,
+      businessPricing,
       weekPayments,
       recentPayments,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { lastLoginAt: { gte: dayStart } } }),
       prisma.organization.count({ where: { plan: 'PRO' } }),
+      prisma.organization.count({ where: { plan: 'BUSINESS' } }),
       prisma.organization.count(),
       getPlanPricing('PRO'),
+      getPlanPricing('BUSINESS'),
       prisma.subscriptionPayment.findMany({
         where: { status: 'SUCCEEDED', succeededAt: { gte: weekStart } },
         select: { amount: true, succeededAt: true },
@@ -84,9 +88,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         kpis: {
           totalUsers,
           activeUsers,
-          mrrFcfa: proOrgCount * proPricing.priceFcfa,
-          premiumOrgCount: proOrgCount,
-          premiumSharePct: totalOrgCount > 0 ? Math.round((proOrgCount / totalOrgCount) * 100) : 0,
+          // MRR + "paid orgs" now cover both PRO and BUSINESS (2026-08-21,
+          // BUSINESS restored — see lib/server/plans/limits.ts's header
+          // comment). Field names kept as `premiumOrgCount`/`premiumSharePct`
+          // (paid = "premium" vs the free tier) rather than renamed, since
+          // nothing here is PRO-specific anymore.
+          mrrFcfa:
+            proOrgCount * proPricing.priceFcfa + businessOrgCount * businessPricing.priceFcfa,
+          premiumOrgCount: proOrgCount + businessOrgCount,
+          premiumSharePct:
+            totalOrgCount > 0
+              ? Math.round(((proOrgCount + businessOrgCount) / totalOrgCount) * 100)
+              : 0,
         },
         revenueChart: { bars, totalFcfa: byDay.reduce((s, v) => s + v, 0) },
         recentPayments: recentPayments.map((p) => ({

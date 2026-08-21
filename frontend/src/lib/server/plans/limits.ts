@@ -18,19 +18,20 @@
 // than importing across that boundary, matching how it already declared
 // its feature-list constants before this change.
 //
-// 2026-08-20: BUSINESS retired per user decision — every advantage it used
-// to gate now lives on PRO, which is displayed everywhere as "Premium"
-// (PLAN_PRICING.PRO.label) while keeping the internal identifier `'PRO'`
-// unchanged. This was a deliberate choice, not an oversight: the `plan`
-// column is a plain string with real rows in the live DB and real Stripe
-// Price/webhook wiring keyed on `'PRO'` — renaming the wire-level value to
-// `'PREMIUM'` would need a data migration and Stripe-side changes for zero
-// functional benefit, since nothing user-facing ever reads the raw enum
-// value (every consumer goes through PLAN_INFO/PLAN_PRICING's `label`).
-// FREE is untouched — no limits or features here changed for it. Price
-// stayed at the old PRO price (9 900 FCFA) per explicit user choice, so
-// STRIPE_PRICE_ID_PRO didn't need to change either — see stripe.ts.
-export const PLANS = ['FREE', 'PRO'] as const;
+// 2026-08-21: BUSINESS restored per explicit user decision (reverting the
+// 2026-08-20 "merge into Pro" — see git history on this file for that
+// interim state). Back to the original 3-tier FREE/PRO/BUSINESS split, with
+// two deliberate deltas from the pre-merge version:
+//   - `whatsappShare` dropped entirely from PlanFeatures/PLAN_LIMITS — the
+//     wa.me text-share on the invoice page was pulled out at the same time
+//     (see app/invoices/[id]/page.tsx) because the user is building a real
+//     WhatsApp-send (likely via the Twilio wiring already used for
+//     subscription reminders) in a future update and doesn't want the
+//     stopgap advertised as a paid differentiator until then.
+//   - No struck-through "original" price on PRO/BUSINESS (see
+//     PLAN_PRICING below) — same "no fake discount anchor" reasoning that
+//     already applied to PRO before this revert.
+export const PLANS = ['FREE', 'PRO', 'BUSINESS'] as const;
 export type Plan = (typeof PLANS)[number];
 
 export function isPlan(value: string): value is Plan {
@@ -38,16 +39,14 @@ export function isPlan(value: string): value is Plan {
 }
 
 export interface PlanFeatures {
-  /** "Partager sur WhatsApp" on invoices/devis. */
-  whatsappShare: boolean;
   /** Garage logo rendered on invoice PDFs (org.logoUrl). */
   invoiceBranding: boolean;
   /** Monthly PDF activity report. */
   monthlyReport: boolean;
   /** CSV data export (clients/vehicles/interventions/invoices/payments). */
   dataExport: boolean;
-  /** Per-member roles (ADMIN vs MEMBER) actually matter — moot on FREE
-   * since it's capped at 1 user anyway. */
+  /** Per-member roles (ADMIN vs MEMBER) actually matter — moot below
+   * BUSINESS since those plans are capped at 1 user anyway. */
   rolesAndPermissions: boolean;
 }
 
@@ -67,23 +66,30 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
     maxInterventionsPerMonth: 5,
     maxUsers: 1,
     features: {
-      whatsappShare: false,
       invoiceBranding: false,
       monthlyReport: false,
       dataExport: false,
       rolesAndPermissions: false,
     },
   },
-  // Everything BUSINESS used to gate on top of PRO's own unlimited
-  // clients/vehicles/interventions/branding/WhatsApp — 5-user team,
-  // monthly report, CSV export, roles — now lives here (2026-08-20).
   PRO: {
+    maxClients: null,
+    maxVehicles: null,
+    maxInterventionsPerMonth: null,
+    maxUsers: 1,
+    features: {
+      invoiceBranding: true,
+      monthlyReport: false,
+      dataExport: false,
+      rolesAndPermissions: false,
+    },
+  },
+  BUSINESS: {
     maxClients: null,
     maxVehicles: null,
     maxInterventionsPerMonth: null,
     maxUsers: 5,
     features: {
-      whatsappShare: true,
       invoiceBranding: true,
       monthlyReport: true,
       dataExport: true,
@@ -94,10 +100,7 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
 
 /** Falls back to FREE for any unrecognized/legacy value rather than
  * throwing — a bad `plan` string should degrade to the safest tier, never
- * to unlimited. Also the safe landing spot for any pre-2026-08-20 row that
- * still says `'BUSINESS'` in the DB (none existed at retirement time, but
- * defends against a stray one the same way it already defended against any
- * other unrecognized legacy value). */
+ * to unlimited. */
 export function getPlanLimits(plan: string): PlanLimits {
   return PLAN_LIMITS[isPlan(plan) ? plan : 'FREE'];
 }
@@ -107,20 +110,15 @@ export interface PlanPricing {
   /** FCFA/month. 0 for FREE. */
   priceFcfa: number;
   /** Struck-through "before" price shown next to `priceFcfa`, or null when
-   * the plan has no discount to display (FREE). */
+   * the plan has no discount to display. Left null for every plan by
+   * default (2026-08-21, see header comment) — the strikethrough UI itself
+   * stays fully wired for a *real* discount (an admin-set value here, or a
+   * coupon via /api/coupons/validate), just never on by default. */
   originalPriceFcfa: number | null;
 }
 
-// "Premium" is a display-only rename of PRO (2026-08-20) — see the header
-// comment for why the internal identifier stayed `'PRO'`.
-//
-// 2026-08-21: dropped the struck-through "12 000" before-price on PRO per
-// explicit user request — it was a permanent fake-discount anchor with no
-// real "before" price behind it (no promo ever charged 12 000). The
-// strikethrough UI itself stays fully wired for the *real* discount case
-// (an admin-set originalPriceFcfa here, or a coupon via
-// /api/coupons/validate) — only this specific always-on illusion is gone.
 export const PLAN_PRICING: Record<Plan, PlanPricing> = {
   FREE: { label: 'Gratuit', priceFcfa: 0, originalPriceFcfa: null },
-  PRO: { label: 'Premium', priceFcfa: 9_900, originalPriceFcfa: null },
+  PRO: { label: 'Pro', priceFcfa: 9_900, originalPriceFcfa: null },
+  BUSINESS: { label: 'Business', priceFcfa: 19_900, originalPriceFcfa: null },
 };

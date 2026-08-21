@@ -90,13 +90,11 @@ export async function sendSubscriptionReminders(
       continue;
     }
 
-    // Single paid plan now (2026-08-20, BUSINESS retired — see
-    // lib/server/plans/limits.ts's header comment); a stale `sub.plan`
-    // value from before the retirement is not worth branching on here.
+    const plan = sub.plan === 'BUSINESS' ? 'BUSINESS' : 'PRO';
     const renewUrl = `${appUrl}/profile`;
     const templateArgs = {
       organizationName: sub.organization.name,
-      plan: 'PRO' as const,
+      plan: plan as 'PRO' | 'BUSINESS',
       daysUntilExpiry,
       renewUrl,
     };

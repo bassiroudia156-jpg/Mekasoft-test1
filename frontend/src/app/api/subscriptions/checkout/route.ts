@@ -1,9 +1,7 @@
 // POST /api/subscriptions/checkout — starts a real payment for the org's
-// own PRO ("Premium") plan (as opposed to /api/orders, which is the generic
+// own PRO/BUSINESS plan (as opposed to /api/orders, which is the generic
 // starter's dormant scaffolding, or /api/payments, which is a garage's
 // CLIENT paying the garage for a repair — three unrelated money flows).
-// 2026-08-20: BUSINESS retired, merged into PRO/"Premium" — see
-// lib/server/plans/limits.ts's header comment.
 //
 // requireCallerOrg('ADMIN') — same gating level as PATCH /api/organizations
 // (shop identity/billing isn't a plain-MEMBER action).
@@ -26,7 +24,7 @@ import { SUBSCRIPTION_PROVIDERS } from '@/lib/server/subscriptions/types';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 const Body = z.object({
-  plan: z.enum(['PRO']),
+  plan: z.enum(['PRO', 'BUSINESS']),
   provider: z.enum(SUBSCRIPTION_PROVIDERS),
   // 2026-08-20 — optional promo code, re-validated server-side (never
   // trust a client-computed discount). Same code the user previewed via

@@ -25,6 +25,17 @@ interface OrgRow {
   _count: { members: number; clients: number; vehicles: number; interventions: number };
 }
 
+const PLAN_LABEL: Record<string, string> = {
+  FREE: 'Gratuit',
+  PRO: 'Pro',
+  BUSINESS: 'Business',
+};
+const PLAN_BADGE_TONE: Record<string, 'accent' | 'primary' | 'muted'> = {
+  FREE: 'muted',
+  PRO: 'accent',
+  BUSINESS: 'primary',
+};
+
 export default function AdminGaragesPage() {
   const { user: me } = useAuth();
   const { toast: showToast } = useToast();
@@ -55,10 +66,7 @@ export default function AdminGaragesPage() {
     setBusy(true);
     try {
       await api(`/api/admin/organizations/${orgId}/plan`, { method: 'PATCH', body: { plan } });
-      showToast(
-        plan === 'PRO' ? 'Garage passé en Premium.' : 'Garage repassé en Gratuit.',
-        'success',
-      );
+      showToast(`Garage passé en ${PLAN_LABEL[plan] ?? plan}.`, 'success');
       setPlanTarget(null);
       load();
     } catch (err) {
@@ -87,7 +95,8 @@ export default function AdminGaragesPage() {
           >
             <option value="">Tous les forfaits</option>
             <option value="FREE">Gratuit</option>
-            <option value="PRO">Premium</option>
+            <option value="PRO">Pro</option>
+            <option value="BUSINESS">Business</option>
           </select>
         </div>
 
@@ -131,8 +140,8 @@ export default function AdminGaragesPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <Badge tone={row.plan === 'PRO' ? 'accent' : 'muted'}>
-                          {row.plan === 'PRO' ? 'Premium' : 'Gratuit'}
+                        <Badge tone={PLAN_BADGE_TONE[row.plan] ?? 'muted'}>
+                          {PLAN_LABEL[row.plan] ?? row.plan}
                         </Badge>
                       </td>
                       <td className="py-3 px-4 text-foreground">{row._count.members}</td>
@@ -144,18 +153,28 @@ export default function AdminGaragesPage() {
                       </td>
                       {isSuperadmin && (
                         <td className="py-3 px-4 text-right">
-                          <Button
-                            variant="outline-primary"
-                            size="sm"
-                            onClick={() =>
-                              setPlanTarget({
-                                org: row,
-                                nextPlan: row.plan === 'PRO' ? 'FREE' : 'PRO',
-                              })
-                            }
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              const nextPlan = e.target.value;
+                              if (nextPlan && nextPlan !== row.plan) {
+                                setPlanTarget({ org: row, nextPlan });
+                              }
+                              e.target.value = '';
+                            }}
+                            className="px-2 py-1.5 border border-border rounded-md text-xs bg-input"
                           >
-                            {row.plan === 'PRO' ? 'Retirer Premium' : 'Passer en Premium'}
-                          </Button>
+                            <option value="" disabled>
+                              Changer de forfait…
+                            </option>
+                            {(['FREE', 'PRO', 'BUSINESS'] as const)
+                              .filter((p) => p !== row.plan)
+                              .map((p) => (
+                                <option key={p} value={p}>
+                                  Passer en {PLAN_LABEL[p]}
+                                </option>
+                              ))}
+                          </select>
                         </td>
                       )}
                     </tr>
@@ -171,9 +190,9 @@ export default function AdminGaragesPage() {
         open={Boolean(planTarget)}
         onClose={() => setPlanTarget(null)}
         title={
-          planTarget?.nextPlan === 'PRO'
-            ? 'Passer ce garage en Premium ?'
-            : "Retirer l'abonnement Premium ?"
+          planTarget
+            ? `Passer ce garage en ${PLAN_LABEL[planTarget.nextPlan] ?? planTarget.nextPlan} ?`
+            : ''
         }
         maxWidth="md"
       >

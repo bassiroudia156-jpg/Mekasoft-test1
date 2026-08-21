@@ -36,8 +36,10 @@ function emptyDefaults() {
   prismaMock.user.count.mockResolvedValueOnce(0); // totalUsers
   prismaMock.user.count.mockResolvedValueOnce(0); // activeUsers
   prismaMock.organization.count.mockResolvedValueOnce(0); // proOrgCount
+  prismaMock.organization.count.mockResolvedValueOnce(0); // businessOrgCount
   prismaMock.organization.count.mockResolvedValueOnce(0); // totalOrgCount
   prismaMock.planPricing.findUnique.mockResolvedValueOnce(null); // getPlanPricing('PRO') fallback
+  prismaMock.planPricing.findUnique.mockResolvedValueOnce(null); // getPlanPricing('BUSINESS') fallback
   prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([]); // weekPayments
   prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([]); // recentPayments
 }
@@ -76,15 +78,24 @@ describe('GET /api/admin/dashboard', () => {
     expect(body.recentPayments).toEqual([]);
   });
 
-  it('computes MRR from the live (DB-overridden) PRO price, not the static default', async () => {
+  it('computes MRR from the live (DB-overridden) PRO+BUSINESS prices, not the static defaults', async () => {
     prismaMock.user.count.mockResolvedValueOnce(50);
     prismaMock.user.count.mockResolvedValueOnce(10);
     prismaMock.organization.count.mockResolvedValueOnce(4); // proOrgCount
+    prismaMock.organization.count.mockResolvedValueOnce(2); // businessOrgCount
     prismaMock.organization.count.mockResolvedValueOnce(20); // totalOrgCount
     prismaMock.planPricing.findUnique.mockResolvedValueOnce({
       id: 'pp_1',
       plan: 'PRO',
       priceFcfa: 7_000,
+      originalPriceFcfa: null,
+      updatedAt: new Date('2026-08-21T00:00:00Z'),
+      updatedByAdminId: adminUser.id,
+    } as never);
+    prismaMock.planPricing.findUnique.mockResolvedValueOnce({
+      id: 'pp_2',
+      plan: 'BUSINESS',
+      priceFcfa: 15_000,
       originalPriceFcfa: null,
       updatedAt: new Date('2026-08-21T00:00:00Z'),
       updatedByAdminId: adminUser.id,
@@ -96,17 +107,20 @@ describe('GET /api/admin/dashboard', () => {
     const body = (await res.json()) as {
       kpis: { mrrFcfa: number; premiumOrgCount: number; premiumSharePct: number };
     };
-    // 4 PRO orgs * 7 000 FCFA override (not the static 9 900 default)
-    expect(body.kpis.mrrFcfa).toBe(28_000);
-    expect(body.kpis.premiumOrgCount).toBe(4);
-    expect(body.kpis.premiumSharePct).toBe(20);
+    // 4 PRO orgs * 7 000 + 2 BUSINESS orgs * 15 000 (DB overrides, not the
+    // static 9 900 / 19 900 defaults)
+    expect(body.kpis.mrrFcfa).toBe(58_000);
+    expect(body.kpis.premiumOrgCount).toBe(6);
+    expect(body.kpis.premiumSharePct).toBe(30);
   });
 
   it('buckets this week’s succeeded payments and includes the recent-payments table', async () => {
     prismaMock.user.count.mockResolvedValueOnce(1);
     prismaMock.user.count.mockResolvedValueOnce(1);
     prismaMock.organization.count.mockResolvedValueOnce(1);
+    prismaMock.organization.count.mockResolvedValueOnce(0);
     prismaMock.organization.count.mockResolvedValueOnce(1);
+    prismaMock.planPricing.findUnique.mockResolvedValueOnce(null);
     prismaMock.planPricing.findUnique.mockResolvedValueOnce(null);
     const recentDate = new Date(Date.now() - 12 * 60 * 60 * 1000);
     prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([

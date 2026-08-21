@@ -92,12 +92,12 @@ export default function AdminDashboardPage() {
                 label="MRR (revenus mensuels)"
                 value={data.kpis.mrrFcfa}
                 format={(n) => `${n.toLocaleString('fr-FR')} FCFA`}
-                sub={`${data.kpis.premiumOrgCount} garage(s) Premium`}
+                sub={`${data.kpis.premiumOrgCount} garage(s) payant(s)`}
                 icon="trending-up"
                 status="success"
               />
               <StatCard
-                label="Garages Premium"
+                label="Garages payants (Pro + Business)"
                 value={data.kpis.premiumOrgCount}
                 sub={`${data.kpis.premiumSharePct}% des garages`}
                 icon="star"

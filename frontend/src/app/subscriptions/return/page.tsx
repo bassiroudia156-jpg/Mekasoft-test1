@@ -41,19 +41,16 @@ interface VerifyDetails {
 const POLL_INTERVAL_MS = 2500;
 const MAX_ATTEMPTS = 20; // ~50s — generous for a redirect + webhook race
 
-// BUSINESS retired 2026-08-20, merged into PRO/"Premium" — see
-// lib/server/plans/limits.ts's header comment.
-const PLAN_LABEL: Record<string, string> = { PRO: 'Premium' };
+const PLAN_LABEL: Record<string, string> = { PRO: 'Pro', BUSINESS: 'Business' };
 const PROVIDER_LABEL: Record<string, string> = {
   STRIPE: 'Carte bancaire (Stripe)',
   MONEROO: 'Mobile Money (Moneroo)',
   CHARIOW: 'Mobile Money (Chariow)',
 };
 const PLAN_FEATURES: Record<string, string[]> = {
-  PRO: [
-    'Clients, véhicules et interventions illimités',
-    'Partage de factures sur WhatsApp',
-    'Logo du garage sur les factures',
+  PRO: ['Clients, véhicules et interventions illimités', 'Logo du garage sur les factures'],
+  BUSINESS: [
+    'Tout Pro',
     "Jusqu'à 5 utilisateurs avec rôles",
     "Rapport d'activité mensuel (PDF)",
     'Export de données (CSV)',
@@ -304,33 +301,24 @@ function ReturnBody() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-secondary-foreground text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    2
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-secondary-foreground">
-                      Invitez votre équipe
+                {/* Multi-user invite step only makes sense on BUSINESS
+                    (maxUsers=5) — PRO is capped at 1 user, same as FREE. */}
+                {details?.plan === 'BUSINESS' && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-secondary-foreground text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      2
                     </div>
-                    <p className="text-xs text-secondary-foreground/70">
-                      Ouvrez votre profil (icône en bas de la barre latérale) pour ajouter
-                      jusqu&apos;à 5 membres.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-secondary-foreground text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
-                    3
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium text-secondary-foreground">
-                      Partagez vos factures sur WhatsApp
+                    <div>
+                      <div className="text-sm font-medium text-secondary-foreground">
+                        Invitez votre équipe
+                      </div>
+                      <p className="text-xs text-secondary-foreground/70">
+                        Ouvrez votre profil (icône en bas de la barre latérale) pour ajouter
+                        jusqu&apos;à 5 membres.
+                      </p>
                     </div>
-                    <p className="text-xs text-secondary-foreground/70">
-                      Le bouton de partage est disponible sur chaque facture.
-                    </p>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 

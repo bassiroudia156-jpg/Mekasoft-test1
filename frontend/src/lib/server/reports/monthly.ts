@@ -1,8 +1,7 @@
-// Monthly activity report aggregation — Premium-plan feature
-// (PLAN_LIMITS.PRO.features.monthlyReport; 2026-08-20: was Business-only,
-// merged into PRO/"Premium" — see lib/server/plans/limits.ts's header
-// comment). Separated from the PDF renderer (pdf.tsx) so the numbers are
-// unit-testable without pulling in @react-pdf/renderer.
+// Monthly activity report aggregation — Business-plan feature
+// (PLAN_LIMITS.BUSINESS.features.monthlyReport). Separated from the PDF
+// renderer (pdf.tsx) so the numbers are unit-testable without pulling in
+// @react-pdf/renderer.
 import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '@/lib/server/prisma';

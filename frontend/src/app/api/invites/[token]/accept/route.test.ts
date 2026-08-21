@@ -77,14 +77,12 @@ describe('POST /api/invites/[token]/accept', () => {
   });
 
   it('regression guard: accepts even when members+pending (including THIS invite) already equal the cap', async () => {
-    // PRO/"Premium", maxUsers=5 (merged in from the retired BUSINESS tier —
-    // see lib/server/plans/limits.ts's header comment): 4 real members +
-    // this one PENDING invite = 5, exactly at cap — legitimate (invites are
-    // allowed to fill the cap). organizationInvite.count is queried with
-    // `id: { not: inviteId } }`, so the mock reflects "0 OTHER pending
-    // invites" even though this invite itself is still PENDING in
-    // BASE_INVITE.
-    prismaMock.organization.findUnique.mockResolvedValue({ plan: 'PRO' } as never);
+    // BUSINESS maxUsers=5: 4 real members + this one PENDING invite = 5,
+    // exactly at cap — legitimate (invites are allowed to fill the cap).
+    // organizationInvite.count is queried with `id: { not: inviteId } }`,
+    // so the mock reflects "0 OTHER pending invites" even though this
+    // invite itself is still PENDING in BASE_INVITE.
+    prismaMock.organization.findUnique.mockResolvedValue({ plan: 'BUSINESS' } as never);
     prismaMock.organizationMember.count.mockResolvedValue(4);
     prismaMock.organizationInvite.count.mockResolvedValue(0);
 
@@ -95,9 +93,9 @@ describe('POST /api/invites/[token]/accept', () => {
   });
 
   it('403s PLAN_LIMIT_USERS when the org downgraded below its reserved seats since the invite was sent', async () => {
-    // The invite was sent while on PRO/"Premium" (room for it); by accept
-    // time the org has been downgraded to FREE (max 1) and already has its
-    // 1 owner.
+    // The invite was sent while on BUSINESS (room for it); by accept time
+    // the org has been downgraded to FREE (max 1) and already has its 1
+    // owner.
     prismaMock.organization.findUnique.mockResolvedValue({ plan: 'FREE' } as never);
     prismaMock.organizationMember.count.mockResolvedValue(1);
     prismaMock.organizationInvite.count.mockResolvedValue(0);

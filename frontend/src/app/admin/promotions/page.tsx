@@ -94,7 +94,7 @@ export default function AdminPromotionsPage() {
     <>
       <AdminTopBar
         title="Promotions"
-        subtitle="Codes promo pour l'abonnement Premium"
+        subtitle="Codes promo pour l'abonnement Pro"
         actions={
           <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
             Nouveau code

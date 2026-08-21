@@ -1,9 +1,8 @@
 // Banani: 83o75a2tYyMD/screens/UpgradePlansPage.jsx ("Upgrade Plans Page")
-// — originally a 3-tier pricing grid + FAQ (Basique/Professionnel/
-// Entreprise → our real Gratuit/Pro/Business, see
-// .planning/banani/subscription-plans-page.md). Down to 2 tiers since
-// 2026-08-20 — BUSINESS retired, its advantages merged into PRO/"Premium"
-// (see lib/server/plans/limits.ts's header comment).
+// — 3-tier pricing grid + FAQ (Basique/Professionnel/Entreprise → our real
+// Gratuit/Pro/Business, see .planning/banani/subscription-plans-page.md).
+// 2026-08-21: BUSINESS restored (reverting the 2026-08-20 "merge into Pro"
+// — see lib/server/plans/limits.ts's header comment).
 // Reached from Mon profil's upgrade banner ("Voir les forfaits") — that
 // section lived on /settings until 2026-08-19, when it moved to /profile
 // alongside Atelier (see profile/page.tsx's header comment).
@@ -23,7 +22,10 @@ import UpgradeSubscriptionModal from '@/components/subscriptions/UpgradeSubscrip
 // 2026-08-20 — "je veux que si j'applique un code promo que ça s'affiche
 // sur la page Premium avant de passer au paiement". Server-validated via
 // POST /api/coupons/validate (never trust a client-side discount
-// calculation) before it ever reaches the checkout modal.
+// calculation) before it ever reaches the checkout modal. Scoped to the
+// PRO card only (2026-08-21, BUSINESS restored as a separate tier
+// afterward) — extending discount display to BUSINESS too would need a
+// second validate call against BUSINESS's own price, not requested here.
 interface AppliedCoupon {
   code: string;
   originalPriceFcfa: number;
@@ -60,23 +62,37 @@ const PLANS = [
       { text: '3 véhicules max', included: true },
       { text: '5 interventions/mois', included: true },
       { text: 'Devis & factures PDF', included: true },
-      { text: 'Partage WhatsApp', included: false },
+      { text: 'Suivi des paiements', included: true },
     ],
   },
   {
     plan: 'PRO' as const,
-    label: 'Premium',
-    blurb: 'Toutes les fonctionnalités',
+    label: 'Pro',
+    blurb: 'Le plus populaire',
     priceFcfa: 9_900,
     originalPriceFcfa: null as number | null,
     featured: true,
     badge: 'Populaire' as string | null,
     features: [
-      { text: 'Clients, véhicules, interventions illimités', included: true },
-      { text: 'Partage WhatsApp', included: true },
+      { text: 'Clients illimités', included: true },
+      { text: 'Véhicules illimités', included: true },
+      { text: 'Interventions illimitées', included: true },
       { text: 'Logo sur les factures', included: true },
-      { text: "Jusqu'à 5 utilisateurs avec rôles", included: true },
-      { text: 'Rapport mensuel PDF + export CSV', included: true },
+    ],
+  },
+  {
+    plan: 'BUSINESS' as const,
+    label: 'Business',
+    blurb: 'Pour les plus grands',
+    priceFcfa: 19_900,
+    originalPriceFcfa: null as number | null,
+    badge: 'Équipes' as string | null,
+    features: [
+      { text: 'Tout Pro', included: true },
+      { text: "Jusqu'à 5 utilisateurs", included: true },
+      { text: 'Rôles & permissions', included: true },
+      { text: 'Rapport mensuel PDF', included: true },
+      { text: 'Export de données CSV', included: true },
     ],
   },
 ];
@@ -84,7 +100,7 @@ const PLANS = [
 const FAQS = [
   {
     q: 'Puis-je changer de forfait à tout moment ?',
-    a: 'Oui — passez à Premium quand vous en avez besoin. Le changement est actif dès la confirmation du paiement.',
+    a: 'Oui — passez à Pro ou Business quand vous en avez besoin. Le changement est actif dès la confirmation du paiement.',
   },
   {
     q: 'Le plan Gratuit a-t-il une durée limitée ?',
@@ -110,6 +126,7 @@ export default function SubscriptionPlansPage() {
   const [org, setOrg] = useState<OrgSummary | null>(null);
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'PRO' | 'BUSINESS'>('PRO');
   const [refreshTick, setRefreshTick] = useState(0);
 
   const [couponInput, setCouponInput] = useState('');
@@ -229,7 +246,7 @@ export default function SubscriptionPlansPage() {
           </p>
 
           {/* Coupon — applied server-side-validated before checkout ever
-              opens, so the discount is visible on the Premium card itself. */}
+              opens, so the discount is visible on the Pro card itself. */}
           <div className="bg-surface border border-border rounded-lg p-4">
             {appliedCoupon ? (
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -280,9 +297,8 @@ export default function SubscriptionPlansPage() {
               section (dark inverted "featured" card, inline pill badge,
               plain price stack, primary-outline buttons on the non-featured
               tiers) so a logged-in upgrade and an anonymous visitor see the
-              identical pricing presentation. base: stacked, md+: 2 columns
-              (was 3 before BUSINESS retired 2026-08-20). */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+              identical pricing presentation. base: stacked, md+: 3 columns. */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
             {PLANS.map((p) => {
               const isCurrent = org?.plan === p.plan;
               const featured = !!p.featured;
@@ -323,7 +339,7 @@ export default function SubscriptionPlansPage() {
 
                   <div className="mb-4 lg:mb-6">
                     <div className="flex items-baseline gap-2 whitespace-nowrap">
-                      {/* Coupon applied to Premium (2026-08-20): strike the
+                      {/* Coupon applied to Pro (2026-08-20): strike the
                           normal price instead of/on top of the original
                           "before" price, and show the discounted total. */}
                       {p.plan === 'PRO' && appliedCoupon ? (
@@ -417,7 +433,10 @@ export default function SubscriptionPlansPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setUpgradeOpen(true)}
+                      onClick={() => {
+                        setSelectedPlan(p.plan as 'PRO' | 'BUSINESS');
+                        setUpgradeOpen(true);
+                      }}
                       className={`w-full py-2 lg:py-3 rounded lg:rounded-md text-xs lg:text-sm font-medium text-center transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
                         featured
                           ? 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -452,9 +471,12 @@ export default function SubscriptionPlansPage() {
       <UpgradeSubscriptionModal
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
+        plan={selectedPlan}
         availableProviders={availableProviders}
         appliedCoupon={
-          appliedCoupon
+          // Coupon UI is PRO-scoped (see the AppliedCoupon comment above) —
+          // never show it against a BUSINESS checkout.
+          appliedCoupon && selectedPlan === 'PRO'
             ? { code: appliedCoupon.code, discountedPriceFcfa: appliedCoupon.discountedPriceFcfa }
             : null
         }

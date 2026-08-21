@@ -7,11 +7,11 @@
 // /subscriptions/return polling /api/subscriptions/verify after the user
 // comes back.
 //
-// 2026-08-20: dropped the Pro-vs-Business plan picker — BUSINESS was
-// retired (its advantages merged into PRO/"Premium", see
-// lib/server/plans/limits.ts's header comment), leaving nothing to choose
-// between. This modal now only ever checks out `'PRO'`; the plan grid
-// became a single static summary card.
+// 2026-08-21: the plan itself is chosen on the pricing grid now (a
+// "Choisir Pro"/"Choisir Business" button per card, see
+// subscriptions/plans/page.tsx) and passed in as `plan` — no in-modal
+// Pro-vs-Business picker here anymore, this just confirms the payment
+// method for whichever plan the caller already picked.
 import { useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import Modal from '@/components/ui/Modal';
@@ -21,20 +21,24 @@ import Icon from '@/components/ui/Icon';
 export interface UpgradeSubscriptionModalProps {
   open: boolean;
   onClose: () => void;
+  plan: 'PRO' | 'BUSINESS';
   availableProviders: string[];
   /** Pre-validated coupon (2026-08-20) — set when the caller already
    * confirmed the code via POST /api/coupons/validate on the pricing page,
    * so the discounted total can be shown here before payment too. The
    * checkout route re-validates server-side regardless (never trust the
-   * client-computed discount). */
+   * client-computed discount). Coupon UI is PRO-scoped — callers should
+   * never pass one alongside `plan="BUSINESS"`. */
   appliedCoupon?: { code: string; discountedPriceFcfa: number } | null | undefined;
 }
 
-// Mirrors lib/server/plans/limits.ts's PLAN_PRICING.PRO — same local-copy
+// Mirrors lib/server/plans/limits.ts's PLAN_PRICING — same local-copy
 // convention as the landing page / profile page (that module lives under
 // lib/server/, this is client-rendered display copy).
-const PLAN_LABEL = 'Premium';
-const PLAN_PRICE_FCFA = 9_900;
+const PLAN_INFO: Record<'PRO' | 'BUSINESS', { label: string; priceFcfa: number }> = {
+  PRO: { label: 'Pro', priceFcfa: 9_900 },
+  BUSINESS: { label: 'Business', priceFcfa: 19_900 },
+};
 
 const PROVIDERS: Record<string, { label: string; blurb: string; icon: string }> = {
   STRIPE: {
@@ -60,9 +64,11 @@ const ERROR_MAP: Record<string, string> = {
 export default function UpgradeSubscriptionModal({
   open,
   onClose,
+  plan,
   availableProviders,
   appliedCoupon,
 }: UpgradeSubscriptionModalProps) {
+  const pricing = PLAN_INFO[plan];
   const [provider, setProvider] = useState<string | null>(availableProviders[0] ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +86,7 @@ export default function UpgradeSubscriptionModal({
       const res = await api<{ checkoutUrl: string }>('/api/subscriptions/checkout', {
         method: 'POST',
         body: {
-          plan: 'PRO',
+          plan,
           provider,
           ...(appliedCoupon ? { couponCode: appliedCoupon.code } : {}),
         },
@@ -96,16 +102,18 @@ export default function UpgradeSubscriptionModal({
     <Modal
       open={open}
       onClose={handleClose}
-      title="Passer au plan Premium"
+      title={`Passer au plan ${pricing.label}`}
       icon="zap"
       maxWidth="lg"
     >
       <div className="flex flex-col gap-6">
         <div className="rounded-md border border-primary bg-primary/5 px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">Plan {PLAN_LABEL}</p>
+          <p className="text-sm font-semibold text-foreground">Plan {pricing.label}</p>
           {appliedCoupon ? (
             <p className="text-xs text-muted-foreground">
-              <span className="line-through mr-1.5">{PLAN_PRICE_FCFA.toLocaleString('fr-FR')}</span>
+              <span className="line-through mr-1.5">
+                {pricing.priceFcfa.toLocaleString('fr-FR')}
+              </span>
               <span className="text-success font-semibold">
                 {appliedCoupon.discountedPriceFcfa.toLocaleString('fr-FR')} FCFA/mois
               </span>{' '}
@@ -113,7 +121,7 @@ export default function UpgradeSubscriptionModal({
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              {PLAN_PRICE_FCFA.toLocaleString('fr-FR')} FCFA/mois — accès à toutes les
+              {pricing.priceFcfa.toLocaleString('fr-FR')} FCFA/mois — accès à toutes les
               fonctionnalités.
             </p>
           )}

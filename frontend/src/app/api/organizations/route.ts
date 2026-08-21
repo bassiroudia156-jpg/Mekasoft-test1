@@ -236,7 +236,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json(
           {
             error: 'PLAN_FEATURE_LOCKED',
-            message: 'Le logo sur les factures est réservé au plan Premium.',
+            message: 'Le logo sur les factures est réservé aux plans Pro et Business.',
           },
           { status: 403, headers: { 'x-request-id': ctx.requestId } },
         );

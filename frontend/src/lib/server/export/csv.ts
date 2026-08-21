@@ -1,8 +1,6 @@
 // Minimal RFC-4180-ish CSV builder — no new dependency for what's a handful
-// of flat columns per resource. Premium-plan export feature
-// (PLAN_LIMITS.PRO.features.dataExport; 2026-08-20: was Business-only,
-// merged into PRO/"Premium" — see lib/server/plans/limits.ts's header
-// comment), see app/api/export/[resource]/route.ts.
+// of flat columns per resource. Business-plan export feature
+// (PLAN_LIMITS.BUSINESS.features.dataExport), see app/api/export/[resource]/route.ts.
 import 'server-only';
 
 /** Wraps a field in quotes and doubles any internal quotes only when

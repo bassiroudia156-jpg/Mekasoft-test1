@@ -47,7 +47,7 @@ export async function GET(
       );
     }
 
-    const planLabel = (PLAN_PRICING[payment.plan as 'PRO'] ?? PLAN_PRICING.PRO).label;
+    const planLabel = (PLAN_PRICING[payment.plan as 'PRO' | 'BUSINESS'] ?? PLAN_PRICING.PRO).label;
     const paidAt = (payment.succeededAt ?? payment.createdAt).toLocaleDateString('fr-FR', {
       day: 'numeric',
       month: 'long',

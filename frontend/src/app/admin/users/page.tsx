@@ -8,11 +8,13 @@
 //
 // Core requirement this page exists for: "je peux le promouvoir en admin,
 // en tant que premium et je peux aussi suspendre son compte ou même
-// enlever son abonnement". Role/status live on User; "Premium" is really
-// the plan of the user's organization (this product has no per-user plan
-// concept) — the detail panel shows each garage the user belongs to with
-// its own "Passer en Premium / Repasser en Gratuit" action, reusing the
-// existing PATCH /api/admin/organizations/[id]/plan route.
+// enlever son abonnement". Role/status live on User; the paid plan is
+// really the plan of the user's organization (this product has no
+// per-user plan concept) — the detail panel shows each garage the user
+// belongs to with its own "Passer en Pro / Repasser en Gratuit" quick
+// action, reusing the existing PATCH /api/admin/organizations/[id]/plan
+// route. This quick toggle only ever targets PRO — a BUSINESS change goes
+// through the fuller plan selector on /admin/garages instead.
 import { useEffect, useState, useCallback } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
@@ -49,6 +51,12 @@ const ROLE_LABEL: Record<string, string> = {
   USER: 'Utilisateur',
   ADMIN: 'Admin',
   SUPERADMIN: 'Superadmin',
+};
+
+const PLAN_LABEL: Record<string, string> = {
+  FREE: 'Gratuit',
+  PRO: 'Pro',
+  BUSINESS: 'Business',
 };
 
 export default function AdminUsersPage() {
@@ -133,7 +141,7 @@ export default function AdminUsersPage() {
     try {
       await api(`/api/admin/organizations/${orgId}/plan`, { method: 'PATCH', body: { plan } });
       showToast(
-        plan === 'PRO' ? 'Garage passé en Premium.' : 'Abonnement retiré (retour Gratuit).',
+        plan === 'PRO' ? 'Garage passé en Pro.' : 'Abonnement retiré (retour Gratuit).',
         'success',
       );
       setPlanTarget(null);
@@ -346,7 +354,7 @@ export default function AdminUsersPage() {
                           {m.organization.name}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {m.role} · {m.organization.plan === 'PRO' ? 'Premium' : 'Gratuit'}
+                          {m.role} · {PLAN_LABEL[m.organization.plan] ?? m.organization.plan}
                         </div>
                       </div>
                       {isSuperadmin && (
@@ -357,11 +365,17 @@ export default function AdminUsersPage() {
                           onClick={() =>
                             setPlanTarget({
                               org: m.organization,
-                              nextPlan: m.organization.plan === 'PRO' ? 'FREE' : 'PRO',
+                              // Quick toggle: FREE → PRO, or any paid plan
+                              // (PRO/BUSINESS) → FREE ("enlever son
+                              // abonnement"). A FREE → BUSINESS jump goes
+                              // through /admin/garages's fuller selector.
+                              nextPlan: m.organization.plan === 'FREE' ? 'PRO' : 'FREE',
                             })
                           }
                         >
-                          {m.organization.plan === 'PRO' ? 'Retirer Premium' : 'Passer en Premium'}
+                          {m.organization.plan === 'FREE'
+                            ? 'Passer en Pro'
+                            : "Retirer l'abonnement"}
                         </Button>
                       )}
                     </div>
@@ -403,9 +417,7 @@ export default function AdminUsersPage() {
         open={Boolean(planTarget)}
         onClose={() => setPlanTarget(null)}
         title={
-          planTarget?.nextPlan === 'PRO'
-            ? 'Passer ce garage en Premium ?'
-            : "Retirer l'abonnement Premium ?"
+          planTarget?.nextPlan === 'PRO' ? 'Passer ce garage en Pro ?' : "Retirer l'abonnement ?"
         }
         maxWidth="md"
       >
@@ -413,7 +425,7 @@ export default function AdminUsersPage() {
           <p className="text-sm text-muted-foreground">
             {planTarget?.org.name} —{' '}
             {planTarget?.nextPlan === 'PRO'
-              ? 'accès Premium activé immédiatement, sans passer par un paiement.'
+              ? 'accès Pro activé immédiatement, sans passer par un paiement.'
               : "retour au forfait Gratuit ; l'abonnement payant en cours (le cas échéant) n'est pas remboursé automatiquement."}
           </p>
           <div className="flex gap-3 justify-end">

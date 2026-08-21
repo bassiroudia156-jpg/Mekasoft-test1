@@ -1,6 +1,4 @@
-// Freemium plan (2026-08-18) — Premium-only CSV export (2026-08-20: was
-// Business-only, merged into PRO/"Premium" — see
-// lib/server/plans/limits.ts's header comment).
+// Freemium plan (2026-08-18) — Business-only CSV export.
 import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -43,14 +41,20 @@ describe('/api/export/[resource]', () => {
     expect(prismaMock.client.findMany).not.toHaveBeenCalled();
   });
 
+  it('403s on PRO too — export is BUSINESS-only', async () => {
+    prismaMock.organization.findUnique.mockResolvedValueOnce({ plan: 'PRO' } as never);
+    const res = await GET(makeGet(), paramsOf('clients'));
+    expect(res.status).toBe(403);
+  });
+
   it('404s an unknown resource segment before touching the DB', async () => {
     const res = await GET(makeGet(), paramsOf('widgets'));
     expect(res.status).toBe(404);
     expect(prismaMock.organization.findUnique).not.toHaveBeenCalled();
   });
 
-  it('returns a CSV attachment for clients on PRO/"Premium"', async () => {
-    prismaMock.organization.findUnique.mockResolvedValueOnce({ plan: 'PRO' } as never);
+  it('returns a CSV attachment for clients on BUSINESS', async () => {
+    prismaMock.organization.findUnique.mockResolvedValueOnce({ plan: 'BUSINESS' } as never);
     prismaMock.client.findMany.mockResolvedValueOnce([
       {
         type: 'INDIVIDUAL',
@@ -77,7 +81,7 @@ describe('/api/export/[resource]', () => {
   });
 
   it('scopes every resource query to the caller organizationId', async () => {
-    prismaMock.organization.findUnique.mockResolvedValueOnce({ plan: 'PRO' } as never);
+    prismaMock.organization.findUnique.mockResolvedValueOnce({ plan: 'BUSINESS' } as never);
     prismaMock.invoice.findMany.mockResolvedValueOnce([]);
     await GET(makeGet(), paramsOf('invoices'));
     expect(prismaMock.invoice.findMany.mock.calls[0]![0]!.where).toEqual({

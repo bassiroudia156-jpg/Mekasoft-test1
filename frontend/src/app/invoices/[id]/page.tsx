@@ -12,7 +12,6 @@ import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useMobileSidebar } from '@/contexts/MobileSidebarContext';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
-import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import Sidebar from '@/components/layout/Sidebar';
 import Badge, { type BadgeTone } from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -53,32 +52,12 @@ const STATUS_TONE: Record<InvoiceStatus, BadgeTone> = {
 
 const STATUS_OPTIONS: InvoiceStatus[] = ['Émise', 'Payée', 'En attente'];
 
-// Standard `wa.me` share-intent link — opens WhatsApp with the message
-// pre-filled and lets the user pick a recipient themselves (no WhatsApp
-// Business API integration, no public/unauthenticated invoice link to
-// build and secure — the PDF stays behind the same auth as everything
-// else; the invoice's own numbers are enough context to share).
-function whatsappShareUrl(invoice: InvoiceDetail): string {
-  const lines = [
-    `Facture ${invoice.reference} — ${invoice.organization.name}`,
-    `Client : ${invoice.client.name}`,
-    `Montant : ${invoice.amount.toLocaleString('fr-FR')} FCFA`,
-    `Statut : ${invoice.status}`,
-    `Échéance : ${new Date(invoice.dueDate).toLocaleDateString('fr-FR')}`,
-  ];
-  return `https://wa.me/?text=${encodeURIComponent(lines.join('\n'))}`;
-}
-
 export default function InvoiceDetailPage() {
   const user = useUser();
   const router = useRouter();
   const { toast } = useToast();
   const { toggle } = useMobileSidebar();
   const params = useParams<{ id: string }>();
-  const { plan } = useCallerOrganization(!!user);
-  // Single paid plan now (2026-08-20, BUSINESS retired — see
-  // lib/server/plans/limits.ts's header comment).
-  const canShareWhatsapp = plan === 'PRO';
 
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -192,26 +171,6 @@ export default function InvoiceDetailPage() {
                 <Icon i="download" size={14} />
                 Télécharger
               </a>
-              {canShareWhatsapp ? (
-                <a
-                  href={whatsappShareUrl(invoice)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-success text-sm font-medium flex items-center gap-1"
-                >
-                  <Icon i="message-circle" size={14} />
-                  WhatsApp
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => toast('Le partage WhatsApp est réservé au plan Premium.', 'info')}
-                  className="text-muted-foreground text-sm font-medium flex items-center gap-1"
-                >
-                  <Icon i="lock" size={14} />
-                  WhatsApp
-                </button>
-              )}
             </div>
           )}
         </div>

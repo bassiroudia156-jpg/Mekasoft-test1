@@ -128,13 +128,11 @@ model Organization {
   city         String?
   teamSizeHint String? // SOLO | SMALL | MEDIUM | LARGE — analytics signal from onboarding step 3, not a hard limit
 
-  // Freemium plan (2026-08-18) — FREE | PRO ("Premium" — BUSINESS retired
-  // 2026-08-20, its advantages merged into PRO, see lib/server/plans/
-  // limits.ts's header comment), see lib/server/plans/limits.ts for the
-  // actual limits/features per plan. Plain String (no DB-level enum), so a
-  // pre-retirement row can still carry a stale "BUSINESS" value — every
-  // consumer must fall back safely rather than assume it's still valid
-  // (see getPlanLimits()/isPlan()/isPayablePlan()).
+  // Freemium plan (2026-08-18) — FREE | PRO | BUSINESS, see
+  // lib/server/plans/limits.ts for the actual limits/features per plan.
+  // Plain String (no DB-level enum), so a stray/legacy value can still show
+  // up — every consumer must fall back safely rather than assume it's
+  // valid (see getPlanLimits()/isPlan()/isPayablePlan()).
   plan          String    @default("FREE")
   planUpdatedAt DateTime?
   // Garage logo shown on invoice PDFs — Pro+ only (gated in the PDF
@@ -693,7 +691,7 @@ model Payment {
 
 // ───────────────────────────────────────────────────────────────────────
 // SaaS subscription billing (2026-08-18) — a garage (Organization) paying
-// MekaSoft for its own PRO ("Premium") plan. Deliberately NOT the same domain
+// MekaSoft for its own PRO/BUSINESS plan. Deliberately NOT the same domain
 // as `Payment` above (a garage's CLIENT paying the garage for a repair) —
 // different actor, different money flow, different provider set. Kept in
 // its own model pair rather than reusing the generic `Order` scaffold
@@ -717,7 +715,7 @@ model Subscription {
   organizationId String       @unique
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  plan     String // PRO — the plan this subscription pays for (never FREE; BUSINESS retired 2026-08-20, see Organization.plan's comment)
+  plan     String // PRO or BUSINESS — the plan this subscription pays for (never FREE, see Organization.plan's comment)
   provider String // STRIPE | MONEROO | CHARIOW
   status   String @default("ACTIVE") // ACTIVE | GRACE | EXPIRED | CANCELED
 
@@ -759,7 +757,7 @@ model SubscriptionPayment {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  plan        String // PRO (BUSINESS retired 2026-08-20, see Organization.plan's comment)
+  plan        String // PRO or BUSINESS, see Organization.plan's comment
   provider    String // STRIPE | MONEROO | CHARIOW
   // Stripe: checkout.session.id (then invoice.id for renewals). Moneroo:
   // payment id. Chariow: purchase.id (sale id, per Chariow.md §3.1).
@@ -798,7 +796,7 @@ model AnonymousSubscriptionIntent {
   atelierName String
   phone       String
 
-  plan        String // PRO (BUSINESS retired 2026-08-20, see Organization.plan's comment)
+  plan        String // PRO or BUSINESS, see Organization.plan's comment
   provider    String // STRIPE | MONEROO | CHARIOW
   providerRef String // provider's checkout/session reference
 
@@ -834,12 +832,12 @@ model AnonymousSubscriptionIntent {
 // is an optional override read by `lib/server/plans/pricing.ts`'s
 // `getPlanPricing()`. Empty table (or a plan with no row) falls back to the
 // static constant, so the app never breaks if this table hasn't been
-// seeded yet. Only 'PRO' is ever expected to have a row in practice (FREE
-// is definitionally 0 and the admin UI doesn't offer to edit it), but the
-// model itself doesn't hardcode that assumption.
+// seeded yet. Only 'PRO'/'BUSINESS' are ever expected to have a row in
+// practice (FREE is definitionally 0 and the admin UI doesn't offer to
+// edit it), but the model itself doesn't hardcode that assumption.
 model PlanPricing {
   id                String   @id @default(cuid())
-  plan              String   @unique // 'PRO' today; schema doesn't special-case it
+  plan              String   @unique // 'PRO' | 'BUSINESS' today; schema doesn't special-case it
   priceFcfa         Int
   originalPriceFcfa Int?
   updatedAt         DateTime @updatedAt

@@ -35,7 +35,7 @@ const Body = z.object({
   email: zEmail,
   atelierName: z.string().trim().min(2, 'Nom trop court').max(120),
   phone: zPhone,
-  plan: z.enum(['PRO']),
+  plan: z.enum(['PRO', 'BUSINESS']),
   provider: z.enum(SUBSCRIPTION_PROVIDERS),
   // 2026-08-20 — same optional promo code as the authenticated checkout
   // route, re-validated server-side.

@@ -81,7 +81,7 @@ const chariowHandler = createWebhookHandler({
       const resolution = await resolveOrganizationForAnonymousIntent(tx, anonymousIntent);
       await activateSubscription(tx, {
         organizationId: resolution.organizationId,
-        plan: anonymousIntent.plan as 'PRO',
+        plan: anonymousIntent.plan as 'PRO' | 'BUSINESS',
         provider: 'CHARIOW',
         providerRef,
         amount: anonymousIntent.amount,
@@ -115,7 +115,7 @@ const chariowHandler = createWebhookHandler({
             const resetUrl = `${appUrl}/reset-password?email=${encodeURIComponent(anonymousIntent.email)}&code=${resolution.resetCode}`;
             const tpl = subscriptionWelcomeEmail({
               organizationName: org.name,
-              plan: anonymousIntent.plan as 'PRO',
+              plan: anonymousIntent.plan as 'PRO' | 'BUSINESS',
               resetUrl,
             });
             await emailQueue.enqueue({
@@ -130,7 +130,7 @@ const chariowHandler = createWebhookHandler({
           const to = org.contactEmail ?? org.owner.email;
           const tpl = subscriptionConfirmedEmail({
             organizationName: org.name,
-            plan: anonymousIntent.plan as 'PRO',
+            plan: anonymousIntent.plan as 'PRO' | 'BUSINESS',
             currentPeriodEnd: sub.currentPeriodEnd.toLocaleDateString('fr-FR'),
             manageUrl: `${appUrl}/profile`,
           });
@@ -161,7 +161,7 @@ const chariowHandler = createWebhookHandler({
 
     await activateSubscription(tx, {
       organizationId: payment.organizationId,
-      plan: payment.plan as 'PRO',
+      plan: payment.plan as 'PRO' | 'BUSINESS',
       provider: 'CHARIOW',
       providerRef,
       amount: payment.amount,
@@ -184,7 +184,7 @@ const chariowHandler = createWebhookHandler({
         const to = org.contactEmail ?? org.owner.email;
         const tpl = subscriptionConfirmedEmail({
           organizationName: org.name,
-          plan: payment.plan as 'PRO',
+          plan: payment.plan as 'PRO' | 'BUSINESS',
           currentPeriodEnd: sub.currentPeriodEnd.toLocaleDateString('fr-FR'),
           manageUrl: `${appUrl}/profile`,
         });

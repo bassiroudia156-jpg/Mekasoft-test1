@@ -22,7 +22,7 @@ function htmlEscape(s: string): string {
 
 export function subscriptionConfirmedEmail(args: {
   organizationName: string;
-  plan: 'PRO';
+  plan: 'PRO' | 'BUSINESS';
   currentPeriodEnd: string; // pre-formatted (fr-FR)
   manageUrl: string;
 }): EmailTemplate {
@@ -42,7 +42,7 @@ export function subscriptionConfirmedEmail(args: {
  * copy from resetPasswordEmail (lib/server/auth/email-templates.ts). */
 export function subscriptionWelcomeEmail(args: {
   organizationName: string;
-  plan: 'PRO';
+  plan: 'PRO' | 'BUSINESS';
   resetUrl: string;
 }): EmailTemplate {
   const org = htmlEscape(args.organizationName);
