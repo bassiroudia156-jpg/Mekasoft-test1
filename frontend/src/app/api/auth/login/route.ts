@@ -162,8 +162,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // 8. Reset failure count and issue cookies.
+    // 8. Reset failure count, stamp lastLoginAt, and issue cookies.
+    //    lastLoginAt (2026-08-20) — the admin dashboard's "Utilisateurs
+    //    actifs" KPI needs a real signal; see schema.prisma's field comment
+    //    for why OAuth login doesn't stamp this too (protected file).
     await recordSuccess(email);
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
     const accessToken = await createAccessToken({
       sub: user.id,

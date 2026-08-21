@@ -61,6 +61,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         createdAt: true,
         updatedAt: true,
         passwordHash: true,
+        // App-wide role (USER | ADMIN | SUPERADMIN) — added 2026-08-20 so
+        // the header "Admin" button can gate on it client-side. Every
+        // mutating admin route still re-checks role server-side
+        // (requireAdmin/requireSuperadmin); this is presentational only.
+        role: true,
         oauthAccounts: { select: { provider: true } },
         memberships: {
           select: { organizationId: true, role: true, jobTitle: true },
@@ -97,6 +102,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           : dbUser.updatedAt
         : null,
       hasPassword: !!dbUser?.passwordHash,
+      role: dbUser?.role ?? 'USER',
       linkedProviders: (dbUser?.oauthAccounts ?? []).map((a) => a.provider),
       organizationId: membership?.organizationId ?? null,
       orgRole: membership?.role ?? null,

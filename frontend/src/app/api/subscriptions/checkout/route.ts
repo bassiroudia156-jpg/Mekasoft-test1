@@ -16,7 +16,8 @@ import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireCallerOrg } from '@/lib/server/organizations/require-caller-org';
 import { prisma } from '@/lib/server/prisma';
-import { PLAN_PRICING } from '@/lib/server/plans/limits';
+import { getPlanPricing } from '@/lib/server/plans/pricing';
+import { redeemCoupon, type CouponError } from '@/lib/server/coupons/redeem';
 import {
   getSubscriptionProvider,
   SubscriptionProviderUnconfiguredError,
@@ -27,7 +28,20 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 const Body = z.object({
   plan: z.enum(['PRO']),
   provider: z.enum(SUBSCRIPTION_PROVIDERS),
+  // 2026-08-20 — optional promo code, re-validated server-side (never
+  // trust a client-computed discount). Same code the user previewed via
+  // POST /api/coupons/validate on /subscriptions/plans before landing here.
+  couponCode: z.string().min(1).max(64).optional(),
 });
+
+// Thrown inside the $transaction below to abort with a specific coupon
+// error, caught right after — Prisma rolls back automatically on any
+// thrown error, so this doubles as the rollback trigger.
+class CouponRejected extends Error {
+  constructor(public readonly code: CouponError) {
+    super(`Coupon rejected: ${code}`);
+  }
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -45,7 +59,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    const { plan, provider: providerName } = parsed.data;
+    const { plan, provider: providerName, couponCode } = parsed.data;
 
     const org = await prisma.organization.findUnique({
       where: { id: auth.organizationId },
@@ -91,23 +105,65 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const pricing = PLAN_PRICING[plan];
+    const pricing = await getPlanPricing(plan);
     const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
-    const payment = await prisma.subscriptionPayment.create({
-      data: {
-        organizationId: org.id,
-        plan,
-        provider: providerName,
-        // Temp placeholder — `providerRef` is unique per provider, so an
-        // empty/shared value would collide across concurrent checkout
-        // attempts. Overwritten with the real provider reference below.
-        providerRef: `pending_${randomUUID()}`,
-        amount: pricing.priceFcfa,
-        currency: 'XOF',
-        status: 'PENDING',
-      },
-    });
+    let payment;
+    try {
+      payment = await prisma.$transaction(async (tx) => {
+        let amount = pricing.priceFcfa;
+
+        if (couponCode) {
+          const redemption = await redeemCoupon(tx, couponCode, plan, pricing.priceFcfa);
+          if ('error' in redemption) throw new CouponRejected(redemption.error);
+          amount = redemption.amountAfterFcfa;
+
+          const created = await tx.subscriptionPayment.create({
+            data: {
+              organizationId: org.id,
+              plan,
+              provider: providerName,
+              // Temp placeholder — `providerRef` is unique per provider, so an
+              // empty/shared value would collide across concurrent checkout
+              // attempts. Overwritten with the real provider reference below.
+              providerRef: `pending_${randomUUID()}`,
+              amount,
+              currency: 'XOF',
+              status: 'PENDING',
+            },
+          });
+          await tx.couponRedemption.create({
+            data: {
+              couponId: redemption.couponId,
+              subscriptionPaymentId: created.id,
+              amountBeforeFcfa: redemption.amountBeforeFcfa,
+              amountAfterFcfa: redemption.amountAfterFcfa,
+            },
+          });
+          return created;
+        }
+
+        return tx.subscriptionPayment.create({
+          data: {
+            organizationId: org.id,
+            plan,
+            provider: providerName,
+            providerRef: `pending_${randomUUID()}`,
+            amount,
+            currency: 'XOF',
+            status: 'PENDING',
+          },
+        });
+      });
+    } catch (err) {
+      if (err instanceof CouponRejected) {
+        return NextResponse.json(
+          { error: 'COUPON_' + err.code, message: 'Ce code promo ne peut pas être appliqué.' },
+          { status: 400, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      throw err;
+    }
 
     const customerEmail = org.contactEmail ?? org.owner.email;
 
@@ -116,7 +172,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         organizationId: org.id,
         organizationName: org.name,
         plan,
-        amount: pricing.priceFcfa,
+        // The actual charge — already reflects a redeemed coupon's
+        // discount if one was applied (payment.amount, not the sticker
+        // pricing.priceFcfa, which would silently ignore the discount).
+        amount: payment.amount,
         currency: 'XOF',
         customerEmail,
         customerName: org.name,

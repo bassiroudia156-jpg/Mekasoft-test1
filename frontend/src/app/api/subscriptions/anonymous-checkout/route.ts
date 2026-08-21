@@ -21,7 +21,8 @@ import { prisma } from '@/lib/server/prisma';
 import { redis } from '@/lib/server/redis';
 import { zEmail, zPhone } from '@/lib/server/zod-helpers';
 import { createEmailLimiter } from '@/lib/server/middleware/rate-limit-by-email';
-import { PLAN_PRICING } from '@/lib/server/plans/limits';
+import { getPlanPricing } from '@/lib/server/plans/pricing';
+import { redeemCoupon, type CouponError } from '@/lib/server/coupons/redeem';
 import {
   getSubscriptionProvider,
   listConfiguredProviders,
@@ -36,7 +37,16 @@ const Body = z.object({
   phone: zPhone,
   plan: z.enum(['PRO']),
   provider: z.enum(SUBSCRIPTION_PROVIDERS),
+  // 2026-08-20 — same optional promo code as the authenticated checkout
+  // route, re-validated server-side.
+  couponCode: z.string().min(1).max(64).optional(),
 });
+
+class CouponRejected extends Error {
+  constructor(public readonly code: CouponError) {
+    super(`Coupon rejected: ${code}`);
+  }
+}
 
 const limiter = createEmailLimiter(redis ? { redis } : {}, {
   bucket: 'subscriptions:anonymous-checkout',
@@ -63,7 +73,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    const { email, atelierName, phone, plan, provider: providerName } = parsed.data;
+    const { email, atelierName, phone, plan, provider: providerName, couponCode } = parsed.data;
 
     const rateFail = await limiter.check(req, email);
     if (rateFail) return rateFail;
@@ -84,31 +94,72 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       throw err;
     }
 
-    const pricing = PLAN_PRICING[plan];
+    const pricing = await getPlanPricing(plan);
     const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
-    const intent = await prisma.anonymousSubscriptionIntent.create({
-      data: {
-        email,
-        atelierName,
-        phone,
-        plan,
-        provider: providerName,
-        // Temp placeholder, same reasoning as checkout/route.ts's
-        // `pending_${randomUUID()}` — providerRef is unique per provider.
-        providerRef: `pending_${randomUUID()}`,
-        amount: pricing.priceFcfa,
-        currency: 'XOF',
-        status: 'PENDING',
-      },
-    });
+    let intent;
+    try {
+      intent = await prisma.$transaction(async (tx) => {
+        let amount = pricing.priceFcfa;
+        let redemption: {
+          couponId: string;
+          amountBeforeFcfa: number;
+          amountAfterFcfa: number;
+        } | null = null;
+
+        if (couponCode) {
+          const result = await redeemCoupon(tx, couponCode, plan, pricing.priceFcfa);
+          if ('error' in result) throw new CouponRejected(result.error);
+          redemption = result;
+          amount = result.amountAfterFcfa;
+        }
+
+        const created = await tx.anonymousSubscriptionIntent.create({
+          data: {
+            email,
+            atelierName,
+            phone,
+            plan,
+            provider: providerName,
+            // Temp placeholder, same reasoning as checkout/route.ts's
+            // `pending_${randomUUID()}` — providerRef is unique per provider.
+            providerRef: `pending_${randomUUID()}`,
+            amount,
+            currency: 'XOF',
+            status: 'PENDING',
+          },
+        });
+
+        if (redemption) {
+          await tx.couponRedemption.create({
+            data: {
+              couponId: redemption.couponId,
+              anonymousIntentId: created.id,
+              amountBeforeFcfa: redemption.amountBeforeFcfa,
+              amountAfterFcfa: redemption.amountAfterFcfa,
+            },
+          });
+        }
+
+        return created;
+      });
+    } catch (err) {
+      if (err instanceof CouponRejected) {
+        return NextResponse.json(
+          { error: 'COUPON_' + err.code, message: 'Ce code promo ne peut pas être appliqué.' },
+          { status: 400, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      throw err;
+    }
 
     try {
       const result = await provider.createCheckout({
         organizationId: intent.id,
         organizationName: atelierName,
         plan,
-        amount: pricing.priceFcfa,
+        // Actual charge, reflects any redeemed coupon discount.
+        amount: intent.amount,
         currency: 'XOF',
         customerEmail: email,
         customerName: atelierName,

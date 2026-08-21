@@ -28,6 +28,10 @@ export interface User {
   orgRole: string | null;
   /** Cosmetic job-title label (Gérant / Mécanicien / …) — display only, see TeamManagementModal. */
   jobTitle: string | null;
+  /** App-wide role — USER | ADMIN | SUPERADMIN. Gates the header "Admin"
+   * button (2026-08-20). Purely presentational client-side; every admin
+   * route re-checks this server-side regardless. */
+  role: 'USER' | 'ADMIN' | 'SUPERADMIN';
 }
 
 interface AuthContextValue {

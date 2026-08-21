@@ -52,7 +52,17 @@ beforeEach(() => {
   mockVerifyCsrf.mockReturnValue(null);
   mockRequireCallerOrg.mockResolvedValue(callerCtx);
   prismaMock.organization.findUnique.mockResolvedValue(orgRow as never);
-  prismaMock.subscriptionPayment.create.mockResolvedValue({ id: 'sp_1' } as never);
+  // 2026-08-20: the create call moved inside prisma.$transaction (coupon
+  // redemption needs to be atomic with it) — passthrough so `tx.*` calls
+  // inside the callback hit the same deep mock as everything else. Same
+  // pattern already used by admin/organizations/[id]/plan/route.test.ts.
+  prismaMock.$transaction.mockImplementation((cb: unknown) => {
+    if (typeof cb === 'function') {
+      return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+    }
+    return Promise.resolve(cb);
+  });
+  prismaMock.subscriptionPayment.create.mockResolvedValue({ id: 'sp_1', amount: 9_900 } as never);
   prismaMock.subscriptionPayment.update.mockResolvedValue({} as never);
 });
 

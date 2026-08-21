@@ -11,13 +11,31 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
 import PageHeader from '@/components/ui/PageHeader';
 import Icon from '@/components/ui/Icon';
+import Button from '@/components/ui/Button';
 import UpgradeSubscriptionModal from '@/components/subscriptions/UpgradeSubscriptionModal';
+
+// 2026-08-20 — "je veux que si j'applique un code promo que ça s'affiche
+// sur la page Premium avant de passer au paiement". Server-validated via
+// POST /api/coupons/validate (never trust a client-side discount
+// calculation) before it ever reaches the checkout modal.
+interface AppliedCoupon {
+  code: string;
+  originalPriceFcfa: number;
+  discountedPriceFcfa: number;
+}
+const COUPON_ERROR_LABEL: Record<string, string> = {
+  NOT_FOUND: 'Code introuvable.',
+  INACTIVE: "Ce code n'est plus actif.",
+  EXPIRED: 'Ce code a expiré.',
+  REDEMPTION_LIMIT_REACHED: "Ce code a atteint sa limite d'utilisation.",
+  PLAN_MISMATCH: "Ce code ne s'applique pas à ce forfait.",
+};
 
 // Mirrors lib/server/plans/limits.ts's PLAN_PRICING/PLAN_LIMITS — same
 // local-copy convention as the landing page and Settings (that module lives
@@ -94,6 +112,53 @@ export default function SubscriptionPlansPage() {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
 
+  const [couponInput, setCouponInput] = useState('');
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponChecking(true);
+    setCouponError(null);
+    try {
+      const res = await api<{
+        valid: boolean;
+        code?: string;
+        originalPriceFcfa?: number;
+        discountedPriceFcfa?: number;
+        error?: string;
+      }>('/api/coupons/validate', { method: 'POST', body: { code, plan: 'PRO' } });
+      if (
+        res.valid &&
+        res.code !== undefined &&
+        res.originalPriceFcfa !== undefined &&
+        res.discountedPriceFcfa !== undefined
+      ) {
+        setAppliedCoupon({
+          code: res.code,
+          originalPriceFcfa: res.originalPriceFcfa,
+          discountedPriceFcfa: res.discountedPriceFcfa,
+        });
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(COUPON_ERROR_LABEL[res.error ?? ''] ?? 'Code invalide.');
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(err instanceof ApiError ? err.message : 'Erreur réseau.');
+    } finally {
+      setCouponChecking(false);
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError(null);
+  }
+
   // 2026-08-19: "je veux que le chargement des donnees soit en temps reel" —
   // same refetch-on-focus convention as dashboard/page.tsx (see
   // useRefetchOnFocus's own comment: no push channel in this app, so
@@ -163,6 +228,54 @@ export default function SubscriptionPlansPage() {
             Choisissez le forfait qui correspond aux besoins de votre atelier.
           </p>
 
+          {/* Coupon — applied server-side-validated before checkout ever
+              opens, so the discount is visible on the Premium card itself. */}
+          <div className="bg-surface border border-border rounded-lg p-4">
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 text-sm">
+                  <Icon i="badge-percent" size={16} className="text-success" />
+                  <span className="text-foreground">
+                    Code <strong>{appliedCoupon.code}</strong> appliqué —{' '}
+                    <span className="text-success font-semibold">
+                      {appliedCoupon.discountedPriceFcfa.toLocaleString('fr-FR')} FCFA/mois
+                    </span>{' '}
+                    au lieu de {appliedCoupon.originalPriceFcfa.toLocaleString('fr-FR')} FCFA.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={removeCoupon}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  Retirer
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Icon i="tag" size={16} className="text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === 'Enter' && void applyCoupon()}
+                  placeholder="Code promo (optionnel)"
+                  className="flex-1 min-w-[160px] px-3 py-2 border border-border rounded-md text-sm bg-input"
+                />
+                <Button
+                  type="button"
+                  variant="outline-primary"
+                  size="sm"
+                  disabled={couponChecking || !couponInput.trim()}
+                  onClick={() => void applyCoupon()}
+                >
+                  {couponChecking ? 'Vérification…' : 'Appliquer'}
+                </Button>
+              </div>
+            )}
+            {couponError && <p className="text-xs text-destructive mt-2">{couponError}</p>}
+          </div>
+
           {/* Plans grid — same card design as the landing page's #tarifs
               section (dark inverted "featured" card, inline pill badge,
               plain price stack, primary-outline buttons on the non-featured
@@ -210,22 +323,42 @@ export default function SubscriptionPlansPage() {
 
                   <div className="mb-4 lg:mb-6">
                     <div className="flex items-baseline gap-2 whitespace-nowrap">
-                      {p.originalPriceFcfa && (
-                        <span
-                          className={`text-sm lg:text-base line-through ${
-                            featured ? 'text-background/40' : 'text-muted-foreground/60'
-                          }`}
-                        >
-                          {p.originalPriceFcfa.toLocaleString('fr-FR')}
-                        </span>
+                      {/* Coupon applied to Premium (2026-08-20): strike the
+                          normal price instead of/on top of the original
+                          "before" price, and show the discounted total. */}
+                      {p.plan === 'PRO' && appliedCoupon ? (
+                        <>
+                          <span
+                            className={`text-sm lg:text-base line-through ${
+                              featured ? 'text-background/40' : 'text-muted-foreground/60'
+                            }`}
+                          >
+                            {p.priceFcfa.toLocaleString('fr-FR')}
+                          </span>
+                          <span className="text-2xl lg:text-4xl font-bold text-success">
+                            {appliedCoupon.discountedPriceFcfa.toLocaleString('fr-FR')}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          {p.originalPriceFcfa && (
+                            <span
+                              className={`text-sm lg:text-base line-through ${
+                                featured ? 'text-background/40' : 'text-muted-foreground/60'
+                              }`}
+                            >
+                              {p.originalPriceFcfa.toLocaleString('fr-FR')}
+                            </span>
+                          )}
+                          <span
+                            className={`text-2xl lg:text-4xl font-bold ${
+                              featured ? 'text-background' : 'text-foreground'
+                            }`}
+                          >
+                            {p.priceFcfa.toLocaleString('fr-FR')}
+                          </span>
+                        </>
                       )}
-                      <span
-                        className={`text-2xl lg:text-4xl font-bold ${
-                          featured ? 'text-background' : 'text-foreground'
-                        }`}
-                      >
-                        {p.priceFcfa.toLocaleString('fr-FR')}
-                      </span>
                     </div>
                     <span
                       className={`text-xs lg:text-sm ${
@@ -320,6 +453,11 @@ export default function SubscriptionPlansPage() {
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
         availableProviders={availableProviders}
+        appliedCoupon={
+          appliedCoupon
+            ? { code: appliedCoupon.code, discountedPriceFcfa: appliedCoupon.discountedPriceFcfa }
+            : null
+        }
       />
     </div>
   );

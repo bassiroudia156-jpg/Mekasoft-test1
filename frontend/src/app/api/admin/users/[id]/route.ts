@@ -23,6 +23,17 @@ const USER_SELECT = {
   status: true,
   emailVerifiedAt: true,
   createdAt: true,
+  lastLoginAt: true,
+  // 2026-08-20: the admin user-detail panel needs to show which garage(s)
+  // this person belongs to and their current plan, so the "Passer en
+  // Premium" / "Retirer l'abonnement" action can target the right
+  // organization — plan lives on Organization, not User, in this product.
+  memberships: {
+    select: {
+      role: true,
+      organization: { select: { id: true, name: true, slug: true, plan: true } },
+    },
+  },
 } as const satisfies Prisma.UserSelect;
 
 export async function GET(

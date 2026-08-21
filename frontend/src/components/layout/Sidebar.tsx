@@ -8,8 +8,14 @@ import BrandLogo from '@/components/ui/BrandLogo';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMobileSidebar } from '@/contexts/MobileSidebarContext';
+import { useCallerOrganization } from '@/lib/useCallerOrganization';
 import { orgRoleLabel } from '@/lib/roleLabel';
 import LogoutConfirmModal from '@/components/auth/LogoutConfirmModal';
+
+// Mirrors lib/server/plans/limits.ts's PLAN_PRICING labels — same
+// local-copy convention as profile/page.tsx (that module lives under
+// lib/server/, this is client-rendered display copy).
+const PLAN_LABEL: Record<string, string> = { FREE: 'Gratuit', PRO: 'Premium' };
 
 export type SidebarActiveKey =
   | 'dashboard'
@@ -63,6 +69,7 @@ export default function Sidebar({ active }: SidebarProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const { open, close } = useMobileSidebar();
+  const { plan, loading: planLoading } = useCallerOrganization(!!user);
   const displayName = user?.name ?? user?.email ?? 'Mon compte';
   const displayRole = user ? orgRoleLabel(user.orgRole, user.jobTitle) : '';
 
@@ -131,6 +138,25 @@ export default function Sidebar({ active }: SidebarProps) {
           ))}
         </nav>
 
+        {/* Admin button (2026-08-20) — visible only to ADMIN/SUPERADMIN,
+            gives quick access to the back-office without hunting for a
+            URL. Purely a convenience link — every /admin/* page and API
+            route re-checks the role server-side regardless. Placed above
+            the account block so it reads as a distinct, elevated action
+            rather than folded into the regular nav items above. */}
+        {user && (user.role === 'ADMIN' || user.role === 'SUPERADMIN') && (
+          <div className="px-3 pb-1">
+            <Link
+              href="/admin"
+              onClick={close}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium bg-accent/15 text-accent hover:bg-accent/25"
+            >
+              <Icon i="shield" size={16} />
+              Admin
+            </Link>
+          </div>
+        )}
+
         {/* Bottom — account block. Navigates to the full /profile page
             (2026-08-19) — used to open the "Mon profil" ManagerProfilePanel
             as a right-side slide-over; per user feedback that felt cramped
@@ -139,7 +165,12 @@ export default function Sidebar({ active }: SidebarProps) {
             everything else in the nav. A direct "Déconnexion" button was
             added right below it (2026-08-19, follow-up feedback) — the
             profile page already has one, but users expect to be able to
-            log out from the sidebar itself without an extra navigation. */}
+            log out from the sidebar itself without an extra navigation.
+            Plan row added 2026-08-20, between the two — moved here from the
+            dashboard TopBar per user request, and this is now the ONLY
+            upgrade CTA in the app (no duplicate elsewhere): a FREE org sees
+            a quiet reminder + "Upgrader" link on every authenticated page;
+            a PRO/"Premium" org sees its plan confirmed instead, no CTA. */}
         <div className="px-3 pb-4 border-t border-primary-foreground/10 pt-4 flex flex-col gap-1">
           <Link
             href="/profile"
@@ -152,6 +183,30 @@ export default function Sidebar({ active }: SidebarProps) {
               <div className="text-primary-foreground/50 text-xs">{displayRole}</div>
             </div>
           </Link>
+
+          {!planLoading &&
+            (plan === 'FREE' ? (
+              <Link
+                href="/subscriptions/plans"
+                onClick={close}
+                aria-label="Upgrader mon abonnement"
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-sm bg-accent/15 hover:bg-accent/25 text-left transition-colors"
+              >
+                <span className="flex items-center gap-1.5 text-primary-foreground/70 text-xs font-medium">
+                  <Icon i="zap" size={12} className="text-accent" />
+                  Plan {PLAN_LABEL.FREE}
+                </span>
+                <span className="text-xs font-semibold text-accent">Upgrader</span>
+              </Link>
+            ) : (
+              <div className="w-full flex items-center gap-1.5 px-3 py-2 rounded-sm bg-primary-foreground/10">
+                <Icon i="crown" size={12} className="text-accent" />
+                <span className="text-primary-foreground/80 text-xs font-medium">
+                  Plan {PLAN_LABEL[plan] ?? plan}
+                </span>
+              </div>
+            ))}
+
           <button
             type="button"
             onClick={() => setLogoutModalOpen(true)}

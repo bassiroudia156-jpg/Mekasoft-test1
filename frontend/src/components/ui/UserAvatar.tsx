@@ -9,6 +9,7 @@
 // or user upload via EditProfileModal) when present, falling back to
 // initials otherwise — no existing caller passes `src` yet, so this is
 // additive.
+import { useState } from 'react';
 import clsx from 'clsx';
 
 export interface UserAvatarProps {
@@ -41,12 +42,21 @@ function colorFor(name: string): string {
 }
 
 export default function UserAvatar({ name, src, className }: UserAvatarProps) {
-  if (src) {
+  // 2026-08-20 fix — an OAuth-provided photo URL (Google, etc.) can go
+  // stale/expire or 404 after the fact; without this, a broken `src` fell
+  // through to the browser's native "broken image" icon instead of the
+  // initials fallback below (reported: admin dashboard top bar, but this
+  // component is shared by every avatar in the app). `key={src}` resets
+  // the failed flag if a fresher `src` is ever passed in for the same user.
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
     return (
       <img
+        key={src}
         src={src}
         alt=""
         aria-hidden="true"
+        onError={() => setFailed(true)}
         className={clsx('object-cover shrink-0', className)}
       />
     );

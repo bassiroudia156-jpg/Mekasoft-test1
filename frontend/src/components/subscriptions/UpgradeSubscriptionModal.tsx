@@ -22,6 +22,12 @@ export interface UpgradeSubscriptionModalProps {
   open: boolean;
   onClose: () => void;
   availableProviders: string[];
+  /** Pre-validated coupon (2026-08-20) — set when the caller already
+   * confirmed the code via POST /api/coupons/validate on the pricing page,
+   * so the discounted total can be shown here before payment too. The
+   * checkout route re-validates server-side regardless (never trust the
+   * client-computed discount). */
+  appliedCoupon?: { code: string; discountedPriceFcfa: number } | null | undefined;
 }
 
 // Mirrors lib/server/plans/limits.ts's PLAN_PRICING.PRO — same local-copy
@@ -55,6 +61,7 @@ export default function UpgradeSubscriptionModal({
   open,
   onClose,
   availableProviders,
+  appliedCoupon,
 }: UpgradeSubscriptionModalProps) {
   const [provider, setProvider] = useState<string | null>(availableProviders[0] ?? null);
   const [submitting, setSubmitting] = useState(false);
@@ -72,7 +79,11 @@ export default function UpgradeSubscriptionModal({
     try {
       const res = await api<{ checkoutUrl: string }>('/api/subscriptions/checkout', {
         method: 'POST',
-        body: { plan: 'PRO', provider },
+        body: {
+          plan: 'PRO',
+          provider,
+          ...(appliedCoupon ? { couponCode: appliedCoupon.code } : {}),
+        },
       });
       window.location.href = res.checkoutUrl;
     } catch (err) {
@@ -92,10 +103,20 @@ export default function UpgradeSubscriptionModal({
       <div className="flex flex-col gap-6">
         <div className="rounded-md border border-primary bg-primary/5 px-4 py-3">
           <p className="text-sm font-semibold text-foreground">Plan {PLAN_LABEL}</p>
-          <p className="text-xs text-muted-foreground">
-            {PLAN_PRICE_FCFA.toLocaleString('fr-FR')} FCFA/mois — accès à toutes les
-            fonctionnalités.
-          </p>
+          {appliedCoupon ? (
+            <p className="text-xs text-muted-foreground">
+              <span className="line-through mr-1.5">{PLAN_PRICE_FCFA.toLocaleString('fr-FR')}</span>
+              <span className="text-success font-semibold">
+                {appliedCoupon.discountedPriceFcfa.toLocaleString('fr-FR')} FCFA/mois
+              </span>{' '}
+              — code {appliedCoupon.code} appliqué.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {PLAN_PRICE_FCFA.toLocaleString('fr-FR')} FCFA/mois — accès à toutes les
+              fonctionnalités.
+            </p>
+          )}
         </div>
 
         <div>

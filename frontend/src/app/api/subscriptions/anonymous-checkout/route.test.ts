@@ -36,7 +36,19 @@ const validBody = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prismaMock.anonymousSubscriptionIntent.create.mockResolvedValue({ id: 'intent_1' } as never);
+  // 2026-08-20: create moved inside prisma.$transaction (coupon redemption
+  // needs to be atomic with it) — same passthrough pattern as
+  // subscriptions/checkout/route.test.ts.
+  prismaMock.$transaction.mockImplementation((cb: unknown) => {
+    if (typeof cb === 'function') {
+      return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+    }
+    return Promise.resolve(cb);
+  });
+  prismaMock.anonymousSubscriptionIntent.create.mockResolvedValue({
+    id: 'intent_1',
+    amount: 9_900,
+  } as never);
   prismaMock.anonymousSubscriptionIntent.update.mockResolvedValue({} as never);
 });
 
