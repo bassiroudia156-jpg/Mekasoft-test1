@@ -18,6 +18,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import Icon from '@/components/ui/Icon';
 import Button from '@/components/ui/Button';
 import UpgradeSubscriptionModal from '@/components/subscriptions/UpgradeSubscriptionModal';
+import PricingComparisonTable from '@/components/subscriptions/PricingComparisonTable';
 
 // 2026-08-20 — "je veux que si j'applique un code promo que ça s'affiche
 // sur la page Premium avant de passer au paiement". Server-validated via
@@ -450,6 +451,8 @@ export default function SubscriptionPlansPage() {
               );
             })}
           </div>
+
+          <PricingComparisonTable />
 
           {/* FAQ */}
           <div className="bg-surface border border-border rounded-lg p-6">
