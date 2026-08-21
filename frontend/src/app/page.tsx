@@ -24,7 +24,6 @@ import DashboardPreview from '@/components/marketing/DashboardPreview';
 import ClientProfilePreview from '@/components/marketing/ClientProfilePreview';
 import FaqAccordion from '@/components/marketing/FaqAccordion';
 import Reveal from '@/components/marketing/Reveal';
-import PricingComparisonTable from '@/components/subscriptions/PricingComparisonTable';
 
 const PROBLEM_CARDS = [
   {
@@ -665,8 +664,6 @@ export default function LandingPage() {
                 </Link>
               </div>
             </div>
-
-            <PricingComparisonTable />
           </div>
         </section>
       </Reveal>

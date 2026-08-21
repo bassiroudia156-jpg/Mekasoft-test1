@@ -18,17 +18,22 @@ import PageHeader from '@/components/ui/PageHeader';
 import Icon from '@/components/ui/Icon';
 import Button from '@/components/ui/Button';
 import UpgradeSubscriptionModal from '@/components/subscriptions/UpgradeSubscriptionModal';
-import PricingComparisonTable from '@/components/subscriptions/PricingComparisonTable';
 
 // 2026-08-20 — "je veux que si j'applique un code promo que ça s'affiche
 // sur la page Premium avant de passer au paiement". Server-validated via
 // POST /api/coupons/validate (never trust a client-side discount
-// calculation) before it ever reaches the checkout modal. Scoped to the
-// PRO card only (2026-08-21, BUSINESS restored as a separate tier
-// afterward) — extending discount display to BUSINESS too would need a
-// second validate call against BUSINESS's own price, not requested here.
+// calculation) before it ever reaches the checkout modal.
+//
+// 2026-08-21 audit fix: this used to hardcode `plan: 'PRO'` on every
+// validate call, so a coupon admins restrict to BUSINESS via the new
+// `appliesToPlan` selector (see admin/promotions/page.tsx) always came
+// back PLAN_MISMATCH here — the discount then only ever rendered on the
+// PRO card regardless. `plan` now travels with the applied coupon so the
+// right card shows it, with a small toggle letting the visitor pick which
+// plan to check the code against before applying.
 interface AppliedCoupon {
   code: string;
+  plan: 'PRO' | 'BUSINESS';
   originalPriceFcfa: number;
   discountedPriceFcfa: number;
 }
@@ -131,6 +136,7 @@ export default function SubscriptionPlansPage() {
   const [refreshTick, setRefreshTick] = useState(0);
 
   const [couponInput, setCouponInput] = useState('');
+  const [couponPlan, setCouponPlan] = useState<'PRO' | 'BUSINESS'>('PRO');
   const [couponChecking, setCouponChecking] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
@@ -147,7 +153,7 @@ export default function SubscriptionPlansPage() {
         originalPriceFcfa?: number;
         discountedPriceFcfa?: number;
         error?: string;
-      }>('/api/coupons/validate', { method: 'POST', body: { code, plan: 'PRO' } });
+      }>('/api/coupons/validate', { method: 'POST', body: { code, plan: couponPlan } });
       if (
         res.valid &&
         res.code !== undefined &&
@@ -156,6 +162,7 @@ export default function SubscriptionPlansPage() {
       ) {
         setAppliedCoupon({
           code: res.code,
+          plan: couponPlan,
           originalPriceFcfa: res.originalPriceFcfa,
           discountedPriceFcfa: res.discountedPriceFcfa,
         });
@@ -175,6 +182,14 @@ export default function SubscriptionPlansPage() {
     setAppliedCoupon(null);
     setCouponInput('');
     setCouponError(null);
+  }
+
+  // Switching which plan to check the code against invalidates whatever
+  // was previously applied — it was validated (and priced) for the other
+  // plan, so keeping it displayed would silently show a stale discount.
+  function selectCouponPlan(next: 'PRO' | 'BUSINESS') {
+    setCouponPlan(next);
+    if (appliedCoupon) removeCoupon();
   }
 
   // 2026-08-19: "je veux que le chargement des donnees soit en temps reel" —
@@ -247,14 +262,15 @@ export default function SubscriptionPlansPage() {
           </p>
 
           {/* Coupon — applied server-side-validated before checkout ever
-              opens, so the discount is visible on the Pro card itself. */}
+              opens, so the discount is visible on the matching card. */}
           <div className="bg-surface border border-border rounded-lg p-4">
             {appliedCoupon ? (
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-sm">
                   <Icon i="badge-percent" size={16} className="text-success" />
                   <span className="text-foreground">
-                    Code <strong>{appliedCoupon.code}</strong> appliqué —{' '}
+                    Code <strong>{appliedCoupon.code}</strong> appliqué sur{' '}
+                    <strong>{appliedCoupon.plan === 'PRO' ? 'Pro' : 'Business'}</strong> —{' '}
                     <span className="text-success font-semibold">
                       {appliedCoupon.discountedPriceFcfa.toLocaleString('fr-FR')} FCFA/mois
                     </span>{' '}
@@ -270,25 +286,49 @@ export default function SubscriptionPlansPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <Icon i="tag" size={16} className="text-muted-foreground shrink-0" />
-                <input
-                  type="text"
-                  value={couponInput}
-                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === 'Enter' && void applyCoupon()}
-                  placeholder="Code promo (optionnel)"
-                  className="flex-1 min-w-[160px] px-3 py-2 border border-border rounded-md text-sm bg-input"
-                />
-                <Button
-                  type="button"
-                  variant="outline-primary"
-                  size="sm"
-                  disabled={couponChecking || !couponInput.trim()}
-                  onClick={() => void applyCoupon()}
-                >
-                  {couponChecking ? 'Vérification…' : 'Appliquer'}
-                </Button>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Icon i="tag" size={16} className="text-muted-foreground shrink-0" />
+                  <input
+                    type="text"
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void applyCoupon())}
+                    placeholder="Code promo (optionnel)"
+                    className="flex-1 min-w-[160px] px-3 py-2 border border-border rounded-md text-sm bg-input"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline-primary"
+                    size="sm"
+                    disabled={couponChecking || !couponInput.trim()}
+                    onClick={() => void applyCoupon()}
+                  >
+                    {couponChecking ? 'Vérification…' : 'Appliquer'}
+                  </Button>
+                </div>
+                {/* A code can be restricted to one plan (admin's "Forfait
+                    d'application") — this picks which price to check it
+                    against, since the two plans have different prices. */}
+                <div className="flex items-center gap-2 pl-6 text-xs">
+                  <span className="text-muted-foreground">Pour le forfait :</span>
+                  <div className="flex gap-1">
+                    {(['PRO', 'BUSINESS'] as const).map((pl) => (
+                      <button
+                        key={pl}
+                        type="button"
+                        onClick={() => selectCouponPlan(pl)}
+                        className={`px-2 py-1 rounded-md font-medium transition-colors ${
+                          couponPlan === pl
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:bg-input'
+                        }`}
+                      >
+                        {pl === 'PRO' ? 'Pro' : 'Business'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
             {couponError && <p className="text-xs text-destructive mt-2">{couponError}</p>}
@@ -340,10 +380,12 @@ export default function SubscriptionPlansPage() {
 
                   <div className="mb-4 lg:mb-6">
                     <div className="flex items-baseline gap-2 whitespace-nowrap">
-                      {/* Coupon applied to Pro (2026-08-20): strike the
-                          normal price instead of/on top of the original
-                          "before" price, and show the discounted total. */}
-                      {p.plan === 'PRO' && appliedCoupon ? (
+                      {/* Coupon applied (2026-08-20, plan-aware since
+                          2026-08-21): strike the normal price instead
+                          of/on top of the original "before" price, and
+                          show the discounted total on whichever card the
+                          coupon was checked against. */}
+                      {appliedCoupon && p.plan === appliedCoupon.plan ? (
                         <>
                           <span
                             className={`text-sm lg:text-base line-through ${
@@ -452,8 +494,6 @@ export default function SubscriptionPlansPage() {
             })}
           </div>
 
-          <PricingComparisonTable />
-
           {/* FAQ */}
           <div className="bg-surface border border-border rounded-lg p-6">
             <h3 className="text-sm font-bold font-headings text-foreground uppercase tracking-widest mb-4">
@@ -477,9 +517,10 @@ export default function SubscriptionPlansPage() {
         plan={selectedPlan}
         availableProviders={availableProviders}
         appliedCoupon={
-          // Coupon UI is PRO-scoped (see the AppliedCoupon comment above) —
-          // never show it against a BUSINESS checkout.
-          appliedCoupon && selectedPlan === 'PRO'
+          // Only carry the coupon into the modal if it was actually
+          // validated against the plan the visitor is now checking out —
+          // e.g. applied against Pro, then clicked "Choisir Business".
+          appliedCoupon && selectedPlan === appliedCoupon.plan
             ? { code: appliedCoupon.code, discountedPriceFcfa: appliedCoupon.discountedPriceFcfa }
             : null
         }
