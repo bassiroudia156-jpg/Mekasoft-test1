@@ -31,6 +31,10 @@ export interface DatePickerProps {
 const WEEKDAYS = ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'];
 const MONTH_YEAR = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' });
 const PANEL_WIDTH = 272;
+// Rough rendered height of the panel below (header + weekday row + 6 grid
+// rows + footer, all at their fixed Tailwind sizes) — used to decide
+// whether it fits below the trigger before flipping above it.
+const PANEL_HEIGHT = 360;
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -122,14 +126,29 @@ export default function DatePicker({
     // filters) while the panel was closed.
     setViewDate(selected ?? startOfDay(new Date()));
 
+    // 2026-08-21 fix: this only ever positioned the panel BELOW the
+    // trigger, with no check for whether it actually fits there — a field
+    // near the bottom of a scrollable container (e.g. the last field in
+    // admin/promotions' "Nouveau code promo" modal) opened a panel that
+    // ran off the bottom of the viewport with no way to reach the rest of
+    // it (the panel is `position: fixed`, so the modal's own internal
+    // scroll doesn't move it). Now it flips above the trigger when there
+    // isn't room below but there is above, and otherwise clamps inside the
+    // viewport so it's never fully unreachable.
     function reposition() {
       const rect = btnRef.current?.getBoundingClientRect();
       if (!rect) return;
       const width = Math.max(rect.width, PANEL_WIDTH);
       const overflowsRight = rect.left + width > window.innerWidth - 8;
+      const fitsBelow = rect.bottom + PANEL_HEIGHT + 4 <= window.innerHeight - 8;
+      const fitsAbove = rect.top - PANEL_HEIGHT - 4 >= 8;
+      const top =
+        fitsBelow || !fitsAbove
+          ? Math.min(rect.bottom + 4, window.innerHeight - PANEL_HEIGHT - 8)
+          : rect.top - PANEL_HEIGHT - 4;
       setStyle({
         position: 'fixed',
-        top: rect.bottom + 4,
+        top: Math.max(8, top),
         width,
         ...(overflowsRight
           ? { right: Math.max(8, window.innerWidth - rect.right) }

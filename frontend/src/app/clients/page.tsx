@@ -2,11 +2,12 @@
 // screen, it has its own header (see PageHeader).
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
 import Sidebar from '@/components/layout/Sidebar';
 import ClientRow from '@/components/clients/ClientRow';
@@ -32,6 +33,7 @@ type StatusFilter = 'all' | 'actif' | 'inactif';
 export default function ClientsPage() {
   const user = useUser();
   const router = useRouter();
+  const { toast } = useToast();
 
   const [items, setItems] = useState<ClientListItem[]>([]);
   const [counts, setCounts] = useState({ total: 0, actif: 0, inactif: 0 });
@@ -41,6 +43,15 @@ export default function ClientsPage() {
   const [qDebounced, setQDebounced] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [refreshTick, setRefreshTick] = useState(0);
+  // Pagination (audit fix, 2026-08-21): the API has always returned a
+  // cursor-paginated `nextCursor` (20 rows/page) — this page just never
+  // consumed it, so any org past 20 clients silently lost access to the
+  // rest. `nextCursorRef` mirrors `nextCursor` state so `loadMore` (which
+  // must NOT be in the debounced-search effect's dependency array) always
+  // reads the latest value without becoming a stale closure.
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const nextCursorRef = useRef<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // 2026-08-18 audit fix: this search box fired an immediate request on
   // every keystroke — the effect below is already race-safe (its own
@@ -56,17 +67,23 @@ export default function ClientsPage() {
     if (!user) return;
     let cancelled = false;
     setLoading(true);
+    setNextCursor(null);
+    nextCursorRef.current = null;
     (async () => {
       const params = new URLSearchParams();
       if (qDebounced) params.set('q', qDebounced);
       if (status !== 'all') params.set('status', status);
       try {
-        const res = await api<{ items: ClientListItem[]; counts: typeof counts }>(
-          `/api/clients?${params.toString()}`,
-        );
+        const res = await api<{
+          items: ClientListItem[];
+          counts: typeof counts;
+          nextCursor: string | null;
+        }>(`/api/clients?${params.toString()}`);
         if (!cancelled) {
           setItems(res.items);
           setCounts(res.counts);
+          setNextCursor(res.nextCursor);
+          nextCursorRef.current = res.nextCursor;
           setError(null);
         }
       } catch (err) {
@@ -90,6 +107,32 @@ export default function ClientsPage() {
   // Audit request (2026-08-18): keep an already-open list current without
   // needing a manual reload — silently re-fetch when the tab regains focus.
   useRefetchOnFocus(() => setRefreshTick((t) => t + 1));
+
+  // Pagination "Charger plus" (audit fix, 2026-08-21) — appends the next
+  // page of results using the cursor the server already hands back on
+  // every response; keeps the current search/status filters.
+  async function loadMore() {
+    if (!nextCursorRef.current || loadingMore) return;
+    setLoadingMore(true);
+    const params = new URLSearchParams();
+    if (qDebounced) params.set('q', qDebounced);
+    if (status !== 'all') params.set('status', status);
+    params.set('cursor', nextCursorRef.current);
+    try {
+      const res = await api<{
+        items: ClientListItem[];
+        counts: typeof counts;
+        nextCursor: string | null;
+      }>(`/api/clients?${params.toString()}`);
+      setItems((prev) => [...prev, ...res.items]);
+      setNextCursor(res.nextCursor);
+      nextCursorRef.current = res.nextCursor;
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Impossible de charger la suite.', 'error');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   if (!user) return null;
 
@@ -215,10 +258,20 @@ export default function ClientsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-background shrink-0">
+            <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-border bg-background shrink-0">
               <span className="text-xs text-muted-foreground">
                 Affichage {items.length} sur {counts.total} clients
               </span>
+              {nextCursor && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loadingMore}
+                  onClick={() => void loadMore()}
+                >
+                  {loadingMore ? 'Chargement…' : 'Charger plus'}
+                </Button>
+              )}
             </div>
           </div>
         </div>

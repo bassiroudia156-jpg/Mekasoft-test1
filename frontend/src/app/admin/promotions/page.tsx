@@ -31,9 +31,15 @@ const EMPTY_FORM = {
   code: '',
   discountType: 'PERCENT' as 'PERCENT' | 'FIXED',
   discountValue: '',
+  // '' = tous les forfaits (appliesToPlan: null server-side) — FREE isn't
+  // an option here since there's nothing to discount on a $0 plan (see
+  // /api/coupons/validate's own PLAN_MISMATCH short-circuit for FREE).
+  appliesToPlan: '' as '' | 'PRO' | 'BUSINESS',
   maxRedemptions: '',
   expiresAt: '',
 };
+
+const PLAN_LABEL: Record<string, string> = { PRO: 'Pro', BUSINESS: 'Business' };
 
 export default function AdminPromotionsPage() {
   const { toast: showToast } = useToast();
@@ -65,6 +71,7 @@ export default function AdminPromotionsPage() {
           code: form.code.trim(),
           discountType: form.discountType,
           discountValue,
+          appliesToPlan: form.appliesToPlan || null,
           maxRedemptions: form.maxRedemptions.trim() ? Number(form.maxRedemptions) : null,
           expiresAt: form.expiresAt.trim() ? new Date(form.expiresAt).toISOString() : null,
         },
@@ -94,7 +101,7 @@ export default function AdminPromotionsPage() {
     <>
       <AdminTopBar
         title="Promotions"
-        subtitle="Codes promo pour l'abonnement Pro"
+        subtitle="Codes promo pour les abonnements Pro et Business"
         actions={
           <Button variant="primary" size="sm" onClick={() => setCreateOpen(true)}>
             Nouveau code
@@ -104,7 +111,7 @@ export default function AdminPromotionsPage() {
       <div className="p-6">
         <div className="bg-surface border border-border rounded-lg p-6">
           {!rows ? (
-            <SkeletonTable rows={6} cols={5} />
+            <SkeletonTable rows={6} cols={6} />
           ) : rows.length === 0 ? (
             <div className="text-sm text-muted-foreground py-8 text-center">
               Aucun code promo pour le moment.
@@ -119,6 +126,9 @@ export default function AdminPromotionsPage() {
                     </th>
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                       Réduction
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Forfait
                     </th>
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                       Utilisations
@@ -142,6 +152,11 @@ export default function AdminPromotionsPage() {
                         {row.discountType === 'PERCENT'
                           ? `-${row.discountValue}%`
                           : `-${row.discountValue.toLocaleString('fr-FR')} FCFA`}
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground">
+                        {row.appliesToPlan
+                          ? (PLAN_LABEL[row.appliesToPlan] ?? row.appliesToPlan)
+                          : 'Tous'}
                       </td>
                       <td className="py-3 px-4 text-foreground">
                         {row.redeemedCount} {row.maxRedemptions ? `/ ${row.maxRedemptions}` : ''}
@@ -201,6 +216,21 @@ export default function AdminPromotionsPage() {
             type="number"
             value={form.discountValue}
             onChange={(v) => setForm((f) => ({ ...f, discountValue: v }))}
+          />
+          <Field
+            label="Forfait d'application"
+            name="appliesToPlan"
+            type="select"
+            value={form.appliesToPlan}
+            onChange={(v) =>
+              setForm((f) => ({ ...f, appliesToPlan: v as '' | 'PRO' | 'BUSINESS' }))
+            }
+            helper="Le code ne sera utilisable que pour l'abonnement au forfait choisi."
+            options={[
+              { value: '', label: 'Tous les forfaits (Pro + Business)' },
+              { value: 'PRO', label: 'Pro uniquement' },
+              { value: 'BUSINESS', label: 'Business uniquement' },
+            ]}
           />
           <Field
             label="Nombre d'utilisations max (optionnel)"

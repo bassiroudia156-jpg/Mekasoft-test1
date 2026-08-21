@@ -34,6 +34,29 @@ function isPlan(value: string | null): value is Plan {
   return value === 'PRO' || value === 'BUSINESS';
 }
 
+// 2026-08-21 audit fix — "je vois que ça ne s'affiche pas sur les prix
+// pour pouvoir cliquer dessus et appliquer les coupons": POST
+// /api/coupons/validate and POST /api/subscriptions/anonymous-checkout's
+// `couponCode` field were both already fully implemented server-side, but
+// this page — the actual "prices" page a logged-out visitor lands on from
+// the landing page's #tarifs section — never rendered any coupon input at
+// all. /subscriptions/plans (the authenticated in-app upgrade flow) has
+// had this UI since 2026-08-20; this mirrors it, validated against
+// whichever `plan` the visitor actually picked (PRO or BUSINESS), so a
+// coupon restricted via `appliesToPlan` correctly matches or rejects.
+interface AppliedCoupon {
+  code: string;
+  originalPriceFcfa: number;
+  discountedPriceFcfa: number;
+}
+const COUPON_ERROR_LABEL: Record<string, string> = {
+  NOT_FOUND: 'Code introuvable.',
+  INACTIVE: "Ce code n'est plus actif.",
+  EXPIRED: 'Ce code a expiré.',
+  REDEMPTION_LIMIT_REACHED: "Ce code a atteint sa limite d'utilisation.",
+  PLAN_MISMATCH: "Ce code ne s'applique pas à ce forfait.",
+};
+
 function CheckoutBody() {
   const params = useSearchParams();
   const plan: Plan = isPlan(params.get('plan')) ? (params.get('plan') as Plan) : 'PRO';
@@ -47,6 +70,53 @@ function CheckoutBody() {
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [couponInput, setCouponInput] = useState('');
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponChecking(true);
+    setCouponError(null);
+    try {
+      const res = await api<{
+        valid: boolean;
+        code?: string;
+        originalPriceFcfa?: number;
+        discountedPriceFcfa?: number;
+        error?: string;
+      }>('/api/coupons/validate', { method: 'POST', body: { code, plan } });
+      if (
+        res.valid &&
+        res.code !== undefined &&
+        res.originalPriceFcfa !== undefined &&
+        res.discountedPriceFcfa !== undefined
+      ) {
+        setAppliedCoupon({
+          code: res.code,
+          originalPriceFcfa: res.originalPriceFcfa,
+          discountedPriceFcfa: res.discountedPriceFcfa,
+        });
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(COUPON_ERROR_LABEL[res.error ?? ''] ?? 'Code invalide.');
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(err instanceof ApiError ? err.message : 'Erreur réseau.');
+    } finally {
+      setCouponChecking(false);
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError(null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +152,14 @@ function CheckoutBody() {
     try {
       const res = await api<{ checkoutUrl: string }>('/api/subscriptions/anonymous-checkout', {
         method: 'POST',
-        body: { email, atelierName, phone, plan, provider: providerToSubmit },
+        body: {
+          email,
+          atelierName,
+          phone,
+          plan,
+          provider: providerToSubmit,
+          ...(appliedCoupon ? { couponCode: appliedCoupon.code } : {}),
+        },
       });
       window.location.href = res.checkoutUrl;
     } catch (err) {
@@ -94,6 +171,7 @@ function CheckoutBody() {
   }
 
   const pricing = PLAN_INFO[plan];
+  const payableFcfa = appliedCoupon ? appliedCoupon.discountedPriceFcfa : pricing.priceFcfa;
 
   return (
     <div className="flex flex-col lg:flex-row bg-background min-h-screen">
@@ -116,9 +194,66 @@ function CheckoutBody() {
             <h2 className="text-2xl font-bold font-headings text-foreground">
               Forfait {pricing.label}
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {pricing.priceFcfa.toLocaleString('fr-FR')} FCFA / mois
+            <p className="text-sm mt-1 flex items-baseline gap-2">
+              {appliedCoupon ? (
+                <>
+                  <span className="text-muted-foreground/60 line-through">
+                    {pricing.priceFcfa.toLocaleString('fr-FR')} FCFA
+                  </span>
+                  <span className="text-success font-semibold">
+                    {appliedCoupon.discountedPriceFcfa.toLocaleString('fr-FR')} FCFA / mois
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">
+                  {pricing.priceFcfa.toLocaleString('fr-FR')} FCFA / mois
+                </span>
+              )}
             </p>
+          </div>
+
+          {/* Coupon — server-validated (POST /api/coupons/validate) before
+              checkout ever submits; see the AppliedCoupon comment above. */}
+          <div className="bg-surface border border-border rounded-lg p-4 mb-6">
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2 text-sm">
+                  <Icon i="badge-percent" size={16} className="text-success" />
+                  <span className="text-foreground">
+                    Code <strong>{appliedCoupon.code}</strong> appliqué.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={removeCoupon}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  Retirer
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Icon i="tag" size={16} className="text-muted-foreground shrink-0" />
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void applyCoupon())}
+                  placeholder="Code promo (optionnel)"
+                  className="flex-1 min-w-[140px] px-3 py-2 border border-border rounded-md text-sm bg-input"
+                />
+                <Button
+                  type="button"
+                  variant="outline-primary"
+                  size="sm"
+                  disabled={couponChecking || !couponInput.trim()}
+                  onClick={() => void applyCoupon()}
+                >
+                  {couponChecking ? 'Vérification…' : 'Appliquer'}
+                </Button>
+              </div>
+            )}
+            {couponError && <p className="text-xs text-destructive mt-2">{couponError}</p>}
           </div>
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -221,9 +356,7 @@ function CheckoutBody() {
               className="w-full mt-2"
             >
               <Icon i="lock" size={14} />
-              {submitting
-                ? 'Redirection…'
-                : `Payer ${pricing.priceFcfa.toLocaleString('fr-FR')} FCFA`}
+              {submitting ? 'Redirection…' : `Payer ${payableFcfa.toLocaleString('fr-FR')} FCFA`}
             </Button>
           </form>
 

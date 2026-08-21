@@ -18,9 +18,11 @@ import { SkeletonInvoiceRow } from '@/components/ui/Skeleton';
 import PageHeader from '@/components/ui/PageHeader';
 import FilterButton from '@/components/ui/FilterButton';
 import Button from '@/components/ui/Button';
+import Field from '@/components/ui/Field';
 import Modal from '@/components/ui/Modal';
 import Icon from '@/components/ui/Icon';
 import AnimatedNumber from '@/components/ui/AnimatedNumber';
+import { DISPLAY_CURRENCIES, formatDisplayAmount, type DisplayCurrency } from '@/lib/currency';
 
 interface InvoiceListItem {
   id: string;
@@ -44,10 +46,6 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: 'Payée', label: 'Payée' },
 ];
 
-function formatAmount(n: number): string {
-  return `${n.toLocaleString('fr-FR')} FCFA`;
-}
-
 function InvoicesListBody() {
   const user = useUser();
   const router = useRouter();
@@ -63,7 +61,22 @@ function InvoicesListBody() {
   const [q, setQ] = useState('');
   const [qDebounced, setQDebounced] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
+  // Date-range filter (audit fix, 2026-08-21): "filtres de dates" was
+  // requested explicitly — /api/interventions already supported dateFrom/
+  // dateTo, invoices didn't; both the server support and this UI are new.
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  // Multi-currency (2026-08-21) — display-only toggle, see lib/currency.ts.
+  // Amounts stay FCFA on the server/API; this only reformats them at
+  // render time. Defaults to FCFA (the real, legally-recorded currency).
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('FCFA');
   const loadSeq = useRef(0);
+  // Pagination (audit fix, 2026-08-21): the API has always returned a
+  // cursor-paginated `nextCursor` (20 rows/page) — this page just never
+  // consumed it, so any org past 20 invoices silently lost access to the
+  // rest.
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<InvoiceListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -83,19 +96,24 @@ function InvoicesListBody() {
   async function load() {
     const seq = ++loadSeq.current;
     setLoading(true);
+    setNextCursor(null);
     const params = new URLSearchParams();
     if (qDebounced) params.set('q', qDebounced);
     if (status !== 'all') params.set('status', status);
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
     try {
       const res = await api<{
         items: InvoiceListItem[];
         counts: Record<string, number>;
         totalAmount: number;
+        nextCursor: string | null;
       }>(`/api/invoices?${params.toString()}`);
       if (loadSeq.current !== seq) return; // a newer load() superseded this one
       setItems(res.items);
       setCounts(res.counts);
       setTotalAmount(res.totalAmount);
+      setNextCursor(res.nextCursor);
       setError(null);
     } catch (err) {
       if (loadSeq.current !== seq) return;
@@ -108,10 +126,39 @@ function InvoicesListBody() {
     }
   }
 
+  // Pagination "Charger plus" (audit fix, 2026-08-21) — appends the next
+  // page using the cursor the server already returns; not part of `load()`
+  // itself so a filter/search change always resets back to page 1 rather
+  // than silently appending onto stale results.
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    const params = new URLSearchParams();
+    if (qDebounced) params.set('q', qDebounced);
+    if (status !== 'all') params.set('status', status);
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+    params.set('cursor', nextCursor);
+    try {
+      const res = await api<{
+        items: InvoiceListItem[];
+        counts: Record<string, number>;
+        totalAmount: number;
+        nextCursor: string | null;
+      }>(`/api/invoices?${params.toString()}`);
+      setItems((prev) => [...prev, ...res.items]);
+      setNextCursor(res.nextCursor);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Impossible de charger la suite.', 'error');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   useEffect(() => {
     if (!user) return;
     void load();
-  }, [user, qDebounced, status]);
+  }, [user, qDebounced, status, dateFrom, dateTo]);
 
   useEffect(() => {
     if (createdId) toast('Facture créée et envoyée au client.', 'success');
@@ -197,6 +244,42 @@ function InvoicesListBody() {
                 />
               ))}
             </div>
+            {/* Date-range filter (audit fix, 2026-08-21) — mirrors
+                dashboard/page.tsx's "Du"/"Au" pattern exactly. */}
+            <div className="flex items-end gap-2">
+              <div className="w-36">
+                <Field
+                  label="Du"
+                  name="invoiceDateFrom"
+                  type="date"
+                  value={dateFrom}
+                  onChange={setDateFrom}
+                  max={dateTo || undefined}
+                />
+              </div>
+              <div className="w-36">
+                <Field
+                  label="Au"
+                  name="invoiceDateTo"
+                  type="date"
+                  value={dateTo}
+                  onChange={setDateTo}
+                  min={dateFrom || undefined}
+                />
+              </div>
+              {(dateFrom || dateTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 mb-2.5"
+                >
+                  Effacer
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-6 text-xs border-l border-border pl-4">
             <div>
@@ -208,8 +291,32 @@ function InvoicesListBody() {
             <div>
               <span className="text-muted-foreground">Montant</span>
               <div className="font-bold text-foreground text-base">
-                <AnimatedNumber value={totalAmount} />
+                <AnimatedNumber
+                  value={totalAmount}
+                  format={(n) => formatDisplayAmount(n, displayCurrency)}
+                />
               </div>
+            </div>
+            {/* Multi-currency display toggle (2026-08-21) — see
+                lib/currency.ts: reformats already-FCFA amounts for
+                viewing convenience only, nothing is sent to the server. */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor="displayCurrency" className="text-muted-foreground">
+                Devise
+              </label>
+              <select
+                id="displayCurrency"
+                value={displayCurrency}
+                onChange={(e) => setDisplayCurrency(e.target.value as DisplayCurrency)}
+                title="Affichage indicatif uniquement — les factures restent en FCFA (PDF, email, export)."
+                className="border border-border bg-input rounded-md px-2 py-1 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                {DISPLAY_CURRENCIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -256,7 +363,7 @@ function InvoicesListBody() {
                         client={row.client}
                         description={row.description}
                         date={new Date(row.createdAt).toLocaleDateString('fr-FR')}
-                        amount={formatAmount(row.amount)}
+                        amount={formatDisplayAmount(row.amount, displayCurrency)}
                         status={row.status}
                         onView={() => router.push(`/invoices/${row.id}`)}
                         onDownloadPdf={() => window.open(`/api/invoices/${row.id}/pdf`, '_blank')}
@@ -270,10 +377,20 @@ function InvoicesListBody() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-background shrink-0">
+            <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-border bg-background shrink-0">
               <span className="text-xs text-muted-foreground">
                 Affichage {items.length} sur {counts.total ?? 0} factures
               </span>
+              {nextCursor && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loadingMore}
+                  onClick={() => void loadMore()}
+                >
+                  {loadingMore ? 'Chargement…' : 'Charger plus'}
+                </Button>
+              )}
             </div>
           </div>
         </div>

@@ -51,6 +51,12 @@ export default function VehiclesPage() {
   const [qDebounced, setQDebounced] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const loadSeq = useRef(0);
+  // Pagination (audit fix, 2026-08-21): the API has always returned a
+  // cursor-paginated `nextCursor` (20 rows/page) — this page just never
+  // consumed it, so any org past 20 vehicles silently lost access to the
+  // rest of its fleet.
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<DeleteVehicleModalTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -70,6 +76,7 @@ export default function VehiclesPage() {
   async function load() {
     const seq = ++loadSeq.current;
     setLoading(true);
+    setNextCursor(null);
     const params = new URLSearchParams();
     if (qDebounced) params.set('q', qDebounced);
     if (status !== 'all') params.set('status', status);
@@ -78,11 +85,13 @@ export default function VehiclesPage() {
         items: VehicleListItem[];
         counts: typeof counts;
         avgMileage: number | null;
+        nextCursor: string | null;
       }>(`/api/vehicles?${params.toString()}`);
       if (loadSeq.current !== seq) return; // a newer load() superseded this one
       setItems(res.items);
       setCounts(res.counts);
       setAvgMileage(res.avgMileage);
+      setNextCursor(res.nextCursor);
       setError(null);
     } catch (err) {
       if (loadSeq.current !== seq) return;
@@ -91,6 +100,33 @@ export default function VehiclesPage() {
       setError(err instanceof ApiError ? err.message : 'Impossible de charger les véhicules.');
     } finally {
       if (loadSeq.current === seq) setLoading(false);
+    }
+  }
+
+  // Pagination "Charger plus" (audit fix, 2026-08-21) — appends the next
+  // page using the cursor the server already returns; not part of `load()`
+  // itself so a filter/search change (which calls `load()`) always resets
+  // back to page 1 rather than silently appending onto stale results.
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    const params = new URLSearchParams();
+    if (qDebounced) params.set('q', qDebounced);
+    if (status !== 'all') params.set('status', status);
+    params.set('cursor', nextCursor);
+    try {
+      const res = await api<{
+        items: VehicleListItem[];
+        counts: typeof counts;
+        avgMileage: number | null;
+        nextCursor: string | null;
+      }>(`/api/vehicles?${params.toString()}`);
+      setItems((prev) => [...prev, ...res.items]);
+      setNextCursor(res.nextCursor);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Impossible de charger la suite.', 'error');
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -314,10 +350,20 @@ export default function VehiclesPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-background shrink-0">
+            <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-border bg-background shrink-0">
               <span className="text-xs text-muted-foreground">
                 Affichage {items.length} sur {counts.total} véhicules
               </span>
+              {nextCursor && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loadingMore}
+                  onClick={() => void loadMore()}
+                >
+                  {loadingMore ? 'Chargement…' : 'Charger plus'}
+                </Button>
+              )}
             </div>
           </div>
         </div>

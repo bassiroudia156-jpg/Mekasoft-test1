@@ -41,6 +41,16 @@ const SUBSCRIPTION_PROVIDER_LABEL: Record<string, string> = {
   CHARIOW: 'Mobile Money (Chariow)',
 };
 
+// Same mapping as /subscriptions/plans and /subscriptions/checkout — see
+// their own "Coupon" comments for why this is server-validated.
+const COUPON_ERROR_LABEL: Record<string, string> = {
+  NOT_FOUND: 'Code introuvable.',
+  INACTIVE: "Ce code n'est plus actif.",
+  EXPIRED: 'Ce code a expiré.',
+  REDEMPTION_LIMIT_REACHED: "Ce code a atteint sa limite d'utilisation.",
+  PLAN_MISMATCH: "Ce code ne s'applique pas à ce forfait.",
+};
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', {
     day: 'numeric',
@@ -69,6 +79,71 @@ const PLAN_INFO: Record<string, { label: string; blurb: string; badge: string }>
     badge: 'bg-accent/10 text-accent',
   },
 };
+
+// Coupon widget for the "Passer à Business" upgrade path (2026-08-21) —
+// factored out since it's inserted identically in both Abonnement render
+// branches below (active/grace subscription vs. manually-assigned plan).
+// Always validates against BUSINESS — see the appliedCoupon state comment
+// in ProfilePage for why.
+function BusinessCouponWidget(props: {
+  applied: { code: string; originalPriceFcfa: number; discountedPriceFcfa: number } | null;
+  input: string;
+  onInputChange: (v: string) => void;
+  checking: boolean;
+  error: string | null;
+  onApply: () => void;
+  onRemove: () => void;
+}) {
+  const { applied, input, onInputChange, checking, error, onApply, onRemove } = props;
+  if (applied) {
+    return (
+      <div className="flex items-center justify-between gap-3 flex-wrap rounded-md border border-success/20 bg-success/5 px-3 py-2.5 text-xs">
+        <div className="flex items-center gap-2">
+          <Icon i="badge-percent" size={14} className="text-success shrink-0" />
+          <span className="text-foreground">
+            Code <strong>{applied.code}</strong> appliqué —{' '}
+            <span className="text-success font-semibold">
+              {applied.discountedPriceFcfa.toLocaleString('fr-FR')} FCFA/mois
+            </span>{' '}
+            au lieu de {applied.originalPriceFcfa.toLocaleString('fr-FR')} FCFA.
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-muted-foreground hover:text-foreground underline shrink-0"
+        >
+          Retirer
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Icon i="tag" size={14} className="text-muted-foreground shrink-0" />
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => onInputChange(e.target.value.toUpperCase())}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), onApply())}
+          placeholder="Code promo pour Business (optionnel)"
+          className="flex-1 min-w-[140px] px-3 py-2 border border-border rounded-md text-xs bg-input"
+        />
+        <Button
+          type="button"
+          variant="outline-primary"
+          size="sm"
+          disabled={checking || !input.trim()}
+          onClick={onApply}
+        >
+          {checking ? 'Vérification…' : 'Appliquer'}
+        </Button>
+      </div>
+      {error && <p className="text-xs text-destructive mt-1.5">{error}</p>}
+    </div>
+  );
+}
 
 // Full-page "Mon profil" (2026-08-19, per user feedback) — replaces the
 // ManagerProfilePanel right-side slide-over that used to open from the
@@ -122,6 +197,23 @@ export default function ProfilePage() {
   // derived from orgPlan alone at render time.
   const [checkoutPlan, setCheckoutPlan] = useState<'PRO' | 'BUSINESS'>('PRO');
   const [portalLoading, setPortalLoading] = useState(false);
+
+  // Coupon (2026-08-21) — "je vois que les coupons s'applique seulement
+  // sur la landing page ... j'aimerais aussi que ça s'applique aussi sur
+  // le dashboard". /subscriptions/plans already had this; the "Passer à
+  // Business" upgrade path here opens UpgradeSubscriptionModal directly
+  // and never gave the user a chance to enter a code first. Always
+  // BUSINESS: every "Passer à Business" button on this page only ever
+  // appears when orgPlan is PRO (never shown once already BUSINESS), so
+  // there's no other plan to check the code against here.
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    originalPriceFcfa: number;
+    discountedPriceFcfa: number;
+  } | null>(null);
+  const [couponInput, setCouponInput] = useState('');
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!organizationId) return;
@@ -185,6 +277,48 @@ export default function ProfilePage() {
       toast(message, 'error');
       setPortalLoading(false);
     }
+  }
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponChecking(true);
+    setCouponError(null);
+    try {
+      const res = await api<{
+        valid: boolean;
+        code?: string;
+        originalPriceFcfa?: number;
+        discountedPriceFcfa?: number;
+        error?: string;
+      }>('/api/coupons/validate', { method: 'POST', body: { code, plan: 'BUSINESS' } });
+      if (
+        res.valid &&
+        res.code !== undefined &&
+        res.originalPriceFcfa !== undefined &&
+        res.discountedPriceFcfa !== undefined
+      ) {
+        setAppliedCoupon({
+          code: res.code,
+          originalPriceFcfa: res.originalPriceFcfa,
+          discountedPriceFcfa: res.discountedPriceFcfa,
+        });
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(COUPON_ERROR_LABEL[res.error ?? ''] ?? 'Code invalide.');
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(err instanceof ApiError ? err.message : 'Erreur réseau.');
+    } finally {
+      setCouponChecking(false);
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError(null);
   }
 
   const [firstName, lastName] = (() => {
@@ -471,6 +605,18 @@ export default function ProfilePage() {
                       )}
                     </div>
 
+                    {orgPlan !== 'BUSINESS' && (
+                      <BusinessCouponWidget
+                        applied={appliedCoupon}
+                        input={couponInput}
+                        onInputChange={setCouponInput}
+                        checking={couponChecking}
+                        error={couponError}
+                        onApply={() => void applyCoupon()}
+                        onRemove={removeCoupon}
+                      />
+                    )}
+
                     <div className="flex flex-wrap gap-2">
                       {orgPlan !== 'BUSINESS' && (
                         <Button
@@ -551,6 +697,17 @@ export default function ProfilePage() {
                       Forfait attribué manuellement — aucun abonnement en ligne actif.
                     </p>
                     {orgPlan !== 'BUSINESS' && (
+                      <BusinessCouponWidget
+                        applied={appliedCoupon}
+                        input={couponInput}
+                        onInputChange={setCouponInput}
+                        checking={couponChecking}
+                        error={couponError}
+                        onApply={() => void applyCoupon()}
+                        onRemove={removeCoupon}
+                      />
+                    )}
+                    {orgPlan !== 'BUSINESS' && (
                       <Button
                         type="button"
                         variant="accent"
@@ -616,6 +773,15 @@ export default function ProfilePage() {
         onClose={() => setUpgradeOpen(false)}
         plan={checkoutPlan}
         availableProviders={availableProviders}
+        appliedCoupon={
+          // Guards against "Renouveler maintenant" (which can also set
+          // checkoutPlan to 'BUSINESS' for an existing Business org, but
+          // that's a renewal, not the upgrade this coupon was checked
+          // against) carrying a stale discount into the wrong checkout.
+          appliedCoupon && checkoutPlan === 'BUSINESS'
+            ? { code: appliedCoupon.code, discountedPriceFcfa: appliedCoupon.discountedPriceFcfa }
+            : null
+        }
       />
     </div>
   );

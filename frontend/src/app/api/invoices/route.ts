@@ -33,6 +33,7 @@ import {
 } from '@/lib/server/invoices/totals';
 
 const Q_MAX = 200;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PAYMENT_TERM_VALUES = PAYMENT_TERMS.map((t) => t.value) as [string, ...string[]];
 
 const InvoiceBody = z.object({
@@ -61,11 +62,27 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const limit = clampLimit(url.searchParams.get('limit'));
     const q = (url.searchParams.get('q') ?? '').slice(0, Q_MAX).trim();
     const status = url.searchParams.get('status');
+    // 2026-08-21 audit fix: date-range filtering was already wired for
+    // /api/interventions but never added here despite the invoices list
+    // page needing the same "filtrer par date" capability — same DATE_RE
+    // validation + inclusive gte/lte-on-createdAt pattern as that route.
+    const dateFromRaw = url.searchParams.get('dateFrom');
+    const dateToRaw = url.searchParams.get('dateTo');
+    const dateFrom = dateFromRaw && DATE_RE.test(dateFromRaw) ? dateFromRaw : null;
+    const dateTo = dateToRaw && DATE_RE.test(dateToRaw) ? dateToRaw : null;
     const cursor = decodeCursor(url.searchParams.get('cursor'));
 
     const where: Prisma.InvoiceWhereInput = {
       organizationId: auth.organizationId,
       ...(status ? { status } : {}),
+      ...(dateFrom || dateTo
+        ? {
+            createdAt: {
+              ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+              ...(dateTo ? { lte: new Date(`${dateTo}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
       // 2026-08-18 audit fix: `q`'s own OR and cursorWhere()'s OR were
       // previously both spread as top-level `OR` keys on the same object —
       // the second silently overwrote the first, so a search combined with
