@@ -8,7 +8,11 @@
 // duplicating a PNG export of them.
 import { ImageResponse } from 'next/og';
 
-export const runtime = 'edge';
+// nodejs, not edge (2026-08-22): the Edge Runtime is deprecated in this
+// Next.js version and was never required here — this image is fully
+// static (no per-request data, no local file reads), and next/og's
+// ImageResponse works the same on nodejs.
+export const runtime = 'nodejs';
 export const alt = 'MekaSoft — Logiciel de gestion pour garages automobiles';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';

@@ -62,5 +62,12 @@ export default withSentryConfig(config, {
   // user base has heavy ad-blocker usage.
   // tunnelRoute: '/monitoring',
   hideSourceMaps: true,
-  disableLogger: true,
+  // 2026-08-22: `disableLogger` is deprecated in @sentry/nextjs 10.x in
+  // favor of this nested option (same effect — strips Sentry SDK logger
+  // statements from the bundle; doesn't affect Sentry Logs).
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
 });
