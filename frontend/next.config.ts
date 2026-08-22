@@ -27,10 +27,17 @@ const securityHeaders = [
 
 const config: NextConfig = {
   reactStrictMode: true,
-  // Standalone output bundles a self-contained server.js + minimal node_modules
-  // into .next/standalone — required by the Docker runtime image (frontend/Dockerfile).
-  // Has no impact on `next dev` / `next start` workflows.
-  output: 'standalone',
+  // 2026-08-22: `output: 'standalone'` REMOVED — it was only ever needed by
+  // `frontend/Dockerfile`, which was deleted during an earlier
+  // simplification pass (the kit is cloud-only/Vercel-only now, see
+  // WORKFLOW.md and STATUS.md's "removed in the simplification waves"
+  // note). Left enabled with no Docker image consuming it, it actively
+  // breaks Vercel deploys: standalone mode reorganizes `.next/`'s output
+  // layout, and Vercel's own build packaging step (`onBuildComplete`) can't
+  // find `next-server.js.nft.json` where it expects it → the build fails
+  // with `ENOENT: .../.next/next-server.js.nft.json`. Vercel already
+  // produces its own optimized serverless output — don't set this on
+  // Vercel. Revisit only if a real Docker/self-hosted target comes back.
   async headers() {
     return [
       {
