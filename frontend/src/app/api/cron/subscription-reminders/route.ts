@@ -38,3 +38,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   });
 }
+
+// 2026-08-23: Vercel Cron invokes scheduled jobs via GET, not POST — see
+// https://vercel.com/docs/cron-jobs (the platform sends a GET request to
+// the configured `path`). This route only exported POST, so every real
+// cron tick from Vercel was hitting a 405 and no cron logic ever ran.
+// Manual/CI callers can still use POST directly; both share the same
+// verifyCronSecret gate inside the handler above.
+export const GET = POST;
