@@ -57,6 +57,27 @@ const COUPON_ERROR_LABEL: Record<string, string> = {
   PLAN_MISMATCH: "Ce code ne s'applique pas à ce forfait.",
 };
 
+// 2026-08-22 — api()'s ApiError.message is the raw `error` code, not the
+// server's friendly `message` field (see lib/api.ts), so every code
+// POST /api/subscriptions/anonymous-checkout can throw needs an entry
+// here or it renders verbatim (e.g. "COUPON_UNSUPPORTED_FOR_PROVIDER").
+// COUPON_UNSUPPORTED_FOR_PROVIDER shouldn't normally be reachable — the
+// method picker below disables Chariow while a coupon is applied — kept
+// as a safety net. The other COUPON_* codes are a re-validation race:
+// fine when applied above, invalid by the time this submit re-checks it.
+const CHECKOUT_ERROR_MAP: Record<string, string> = {
+  SUBSCRIPTION_PROVIDER_UNCONFIGURED: "Ce moyen de paiement n'est pas encore disponible.",
+  CHECKOUT_FAILED: 'Le paiement a échoué au démarrage. Réessayez.',
+  TOO_MANY_CHECKOUT_ATTEMPTS: 'Trop de tentatives. Réessayez plus tard.',
+  COUPON_UNSUPPORTED_FOR_PROVIDER:
+    "Ce code promo n'est pas compatible avec Mobile Money. Retirez-le ou payez par carte.",
+  COUPON_NOT_FOUND: 'Le code promo appliqué est introuvable. Réessayez sans code.',
+  COUPON_INACTIVE: "Le code promo appliqué n'est plus actif.",
+  COUPON_EXPIRED: 'Le code promo appliqué a expiré.',
+  COUPON_REDEMPTION_LIMIT_REACHED: "Le code promo a atteint sa limite d'utilisation.",
+  COUPON_PLAN_MISMATCH: "Le code promo ne s'applique pas à ce forfait.",
+};
+
 function CheckoutBody() {
   const params = useSearchParams();
   const plan: Plan = isPlan(params.get('plan')) ? (params.get('plan') as Plan) : 'PRO';
@@ -64,6 +85,32 @@ function CheckoutBody() {
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [method, setMethod] = useState<Method>('CARD');
   const [mobileProvider, setMobileProvider] = useState<MobileProvider | null>(null);
+
+  // Live pricing (audit fix, 2026-08-21) — PLAN_INFO above is the static
+  // fallback shown while this loads/if it fails; GET /api/plans/pricing
+  // reflects any admin override from /admin/pricing, which the hardcoded
+  // constant never could. Without this, a visitor could see one price
+  // here and be charged the live (correct) one at actual checkout —
+  // POST /api/subscriptions/anonymous-checkout already calls
+  // getPlanPricing() server-side.
+  const [livePriceFcfa, setLivePriceFcfa] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api<{ pricing: Record<string, { priceFcfa: number }> }>(
+          '/api/plans/pricing',
+        );
+        if (!cancelled) setLivePriceFcfa(res.pricing[plan]?.priceFcfa ?? null);
+      } catch {
+        // Falls back to PLAN_INFO's static price below.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [plan]);
 
   const [email, setEmail] = useState('');
   const [atelierName, setAtelierName] = useState('');
@@ -138,11 +185,36 @@ function CheckoutBody() {
   const stripeAvailable = availableProviders.includes('STRIPE');
   const monerooAvailable = availableProviders.includes('MONEROO');
   const chariowAvailable = availableProviders.includes('CHARIOW');
+
+  // 2026-08-22 bug fix — Chariow has no discount API (Chariow.md §6 "Pas
+  // d'override de prix"); the checkout route rejects CHARIOW + a coupon
+  // with COUPON_UNSUPPORTED_FOR_PROVIDER. `mobileMoneyAvailable` stays the
+  // raw "is any mobile-money rail configured" signal (drives the generic
+  // "Bientôt disponible" caption); `chariowUsable`/`mobileMoneyUsable`
+  // factor the applied coupon in, so the UI can steer around the dead end
+  // instead of letting the user hit that error after submitting.
   const mobileMoneyAvailable = monerooAvailable || chariowAvailable;
+  const chariowUsable = chariowAvailable && !appliedCoupon;
+  const mobileMoneyUsable = monerooAvailable || chariowUsable;
 
   const resolvedMobileProvider: MobileProvider | null =
-    mobileProvider ?? (monerooAvailable ? 'MONEROO' : chariowAvailable ? 'CHARIOW' : null);
+    mobileProvider && (mobileProvider !== 'CHARIOW' || chariowUsable)
+      ? mobileProvider
+      : monerooAvailable
+        ? 'MONEROO'
+        : chariowUsable
+          ? 'CHARIOW'
+          : null;
   const providerToSubmit = method === 'CARD' ? 'STRIPE' : resolvedMobileProvider;
+
+  // A coupon applied while Mobile Money is selected but only Chariow is
+  // configured leaves nothing payable under that method — fall back to
+  // card rather than leave the "Payer" button permanently disabled.
+  useEffect(() => {
+    if (!mobileMoneyUsable && method === 'MOBILE_MONEY') {
+      setMethod('CARD');
+    }
+  }, [mobileMoneyUsable, method]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -164,13 +236,15 @@ function CheckoutBody() {
       window.location.href = res.checkoutUrl;
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : 'Impossible de démarrer le paiement. Réessayez.',
+        err instanceof ApiError
+          ? (CHECKOUT_ERROR_MAP[err.code] ?? err.message)
+          : 'Impossible de démarrer le paiement. Réessayez.',
       );
       setSubmitting(false);
     }
   }
 
-  const pricing = PLAN_INFO[plan];
+  const pricing = { ...PLAN_INFO[plan], priceFcfa: livePriceFcfa ?? PLAN_INFO[plan].priceFcfa };
   const payableFcfa = appliedCoupon ? appliedCoupon.discountedPriceFcfa : pricing.priceFcfa;
 
   return (
@@ -299,18 +373,23 @@ function CheckoutBody() {
                 </button>
                 <button
                   type="button"
-                  disabled={!mobileMoneyAvailable}
+                  disabled={!mobileMoneyUsable}
                   onClick={() => setMethod('MOBILE_MONEY')}
                   className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-md border text-sm font-medium transition-colors ${
                     method === 'MOBILE_MONEY'
                       ? 'border-primary bg-primary/5 text-primary'
                       : 'border-border text-foreground hover:bg-input'
-                  } ${!mobileMoneyAvailable ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  } ${!mobileMoneyUsable ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   <Icon i="smartphone" size={18} />
                   Mobile Money
                   {!mobileMoneyAvailable && (
                     <span className="text-[10px] text-muted-foreground">Bientôt disponible</span>
+                  )}
+                  {mobileMoneyAvailable && !mobileMoneyUsable && (
+                    <span className="text-[10px] text-muted-foreground">
+                      Indisponible avec un code promo
+                    </span>
                   )}
                 </button>
               </div>
@@ -330,11 +409,14 @@ function CheckoutBody() {
                   </button>
                   <button
                     type="button"
+                    disabled={!chariowUsable}
                     onClick={() => setMobileProvider('CHARIOW')}
                     className={`flex-1 px-3 py-2 rounded-md border text-xs font-medium ${
-                      resolvedMobileProvider === 'CHARIOW'
-                        ? 'border-primary text-primary'
-                        : 'border-border text-muted-foreground'
+                      !chariowUsable
+                        ? 'opacity-40 cursor-not-allowed border-border text-muted-foreground'
+                        : resolvedMobileProvider === 'CHARIOW'
+                          ? 'border-primary text-primary'
+                          : 'border-border text-muted-foreground'
                     }`}
                   >
                     Chariow

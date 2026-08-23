@@ -24,6 +24,19 @@ import DashboardPreview from '@/components/marketing/DashboardPreview';
 import ClientProfilePreview from '@/components/marketing/ClientProfilePreview';
 import FaqAccordion from '@/components/marketing/FaqAccordion';
 import Reveal from '@/components/marketing/Reveal';
+import { getPlanPricing } from '@/lib/server/plans/pricing';
+
+// Audit fix (2026-08-21): lib/server/plans/pricing.ts's own file comment
+// says an admin override via /admin/pricing "immediately affects what
+// /subscriptions/plans, the landing page, and new checkouts show" — that
+// was only true for the actual charge amount (checkout routes already
+// call getPlanPricing()); this page hardcoded static "9 900"/"19 900"
+// strings instead, so an override silently diverged from what visitors
+// were shown. Now reads the live price at render time. ISR (not fully
+// dynamic) since pricing changes rarely and this is the highest-traffic
+// page in the app — a 5min cache is a fine trade for not hitting Postgres
+// on every anonymous visit.
+export const revalidate = 300;
 
 const PROBLEM_CARDS = [
   {
@@ -229,7 +242,11 @@ const FAQ_JSON_LD = {
   })),
 };
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const [proPricing, businessPricing] = await Promise.all([
+    getPlanPricing('PRO'),
+    getPlanPricing('BUSINESS'),
+  ]);
   return (
     <div className="bg-background font-body">
       <script
@@ -588,7 +605,9 @@ export default function LandingPage() {
                 </p>
                 <div className="mb-4 lg:mb-6">
                   <div className="flex items-baseline gap-2 whitespace-nowrap">
-                    <span className="text-2xl lg:text-4xl font-bold text-background">9 900</span>
+                    <span className="text-2xl lg:text-4xl font-bold text-background">
+                      {proPricing.priceFcfa.toLocaleString('fr-FR')}
+                    </span>
                   </div>
                   <span className="text-xs lg:text-sm text-background/60">
                     <span className="lg:hidden">FCFA/mois</span>
@@ -634,7 +653,9 @@ export default function LandingPage() {
                 </p>
                 <div className="mb-4 lg:mb-6">
                   <div className="flex items-baseline gap-2 whitespace-nowrap">
-                    <span className="text-2xl lg:text-4xl font-bold text-foreground">19 900</span>
+                    <span className="text-2xl lg:text-4xl font-bold text-foreground">
+                      {businessPricing.priceFcfa.toLocaleString('fr-FR')}
+                    </span>
                   </div>
                   <span className="text-xs lg:text-sm text-muted-foreground">
                     <span className="lg:hidden">FCFA/mois</span>

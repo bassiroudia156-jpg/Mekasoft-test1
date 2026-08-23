@@ -135,6 +135,34 @@ export default function SubscriptionPlansPage() {
   const [selectedPlan, setSelectedPlan] = useState<'PRO' | 'BUSINESS'>('PRO');
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // Live pricing (audit fix, 2026-08-21) — PLANS above is the static
+  // fallback (and the source of truth for labels/features/badges, which
+  // aren't admin-editable); price/originalPrice get overridden here from
+  // GET /api/plans/pricing so an admin override via /admin/pricing
+  // actually shows up here instead of only affecting the real charge
+  // amount. See that route's header comment for the full story.
+  const [livePricing, setLivePricing] = useState<Record<
+    string,
+    { priceFcfa: number; originalPriceFcfa: number | null }
+  > | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api<{
+          pricing: Record<string, { priceFcfa: number; originalPriceFcfa: number | null }>;
+        }>('/api/plans/pricing');
+        if (!cancelled) setLivePricing(res.pricing);
+      } catch {
+        // Cards just keep showing the static defaults from PLANS.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [couponInput, setCouponInput] = useState('');
   const [couponPlan, setCouponPlan] = useState<'PRO' | 'BUSINESS'>('PRO');
   const [couponChecking, setCouponChecking] = useState(false);
@@ -343,6 +371,9 @@ export default function SubscriptionPlansPage() {
             {PLANS.map((p) => {
               const isCurrent = org?.plan === p.plan;
               const featured = !!p.featured;
+              const live = livePricing?.[p.plan];
+              const priceFcfa = live ? live.priceFcfa : p.priceFcfa;
+              const originalPriceFcfa = live ? live.originalPriceFcfa : p.originalPriceFcfa;
               return (
                 <div
                   key={p.plan}
@@ -392,7 +423,7 @@ export default function SubscriptionPlansPage() {
                               featured ? 'text-background/40' : 'text-muted-foreground/60'
                             }`}
                           >
-                            {p.priceFcfa.toLocaleString('fr-FR')}
+                            {priceFcfa.toLocaleString('fr-FR')}
                           </span>
                           <span className="text-2xl lg:text-4xl font-bold text-success">
                             {appliedCoupon.discountedPriceFcfa.toLocaleString('fr-FR')}
@@ -400,13 +431,13 @@ export default function SubscriptionPlansPage() {
                         </>
                       ) : (
                         <>
-                          {p.originalPriceFcfa && (
+                          {originalPriceFcfa && (
                             <span
                               className={`text-sm lg:text-base line-through ${
                                 featured ? 'text-background/40' : 'text-muted-foreground/60'
                               }`}
                             >
-                              {p.originalPriceFcfa.toLocaleString('fr-FR')}
+                              {originalPriceFcfa.toLocaleString('fr-FR')}
                             </span>
                           )}
                           <span
@@ -414,7 +445,7 @@ export default function SubscriptionPlansPage() {
                               featured ? 'text-background' : 'text-foreground'
                             }`}
                           >
-                            {p.priceFcfa.toLocaleString('fr-FR')}
+                            {priceFcfa.toLocaleString('fr-FR')}
                           </span>
                         </>
                       )}
@@ -424,7 +455,7 @@ export default function SubscriptionPlansPage() {
                         featured ? 'text-background/60' : 'text-muted-foreground'
                       }`}
                     >
-                      {p.priceFcfa === 0 ? 'FCFA — à vie' : 'FCFA / mois'}
+                      {priceFcfa === 0 ? 'FCFA — à vie' : 'FCFA / mois'}
                     </span>
                   </div>
 
