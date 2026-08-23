@@ -77,10 +77,32 @@ export const stripeSubscriptionProvider: SubscriptionProvider = {
     const priceId = priceIdForPlan(input.plan);
     if (!priceId) throw new Error(`No STRIPE_PRICE_ID configured for plan ${input.plan}`);
 
+    // 2026-08-22 bug fix — a redeemed coupon (see coupons/redeem.ts) was
+    // computed and stored on the SubscriptionPayment/AnonymousSubscription-
+    // Intent row, but the recurring `priceId` above is fixed in Stripe's
+    // own dashboard and this call never referenced the discount at all —
+    // Checkout silently charged the full sticker price regardless of any
+    // coupon. Fix: create a single-use, once-off Stripe Coupon for exactly
+    // the discounted amount and scope it to just this Checkout Session via
+    // `discounts`. The Price object itself — and therefore every renewal
+    // after the first — stays untouched.
+    let discounts: { coupon: string }[] | undefined;
+    if (input.discountAmount && input.discountAmount > 0) {
+      const coupon = await client.coupons.create({
+        amount_off: input.discountAmount,
+        currency: input.currency.toLowerCase(),
+        duration: 'once',
+        max_redemptions: 1,
+        name: `Coupon — ${input.subscriptionPaymentId}`,
+      });
+      discounts = [{ coupon: coupon.id }];
+    }
+
     const session = await client.checkout.sessions.create({
       mode: 'subscription',
       customer_email: input.customerEmail,
       line_items: [{ price: priceId, quantity: 1 }],
+      ...(discounts ? { discounts } : {}),
       success_url: input.successUrl,
       cancel_url: input.cancelUrl,
       // Metadata on the Checkout Session itself (for the session record) AND
