@@ -14,6 +14,9 @@
 // script needs it the way scripts/set-org-plan.ts needs limits.ts).
 import { prisma } from '@/lib/server/prisma';
 import { PLAN_PRICING, type Plan, type PlanPricing as StaticPlanPricing } from './limits';
+import { createLogger } from '@/lib/server/logger';
+
+const log = createLogger();
 
 export interface ResolvedPlanPricing extends StaticPlanPricing {
   /** true when this came from the DB override, false when it's the static fallback. */
@@ -23,17 +26,28 @@ export interface ResolvedPlanPricing extends StaticPlanPricing {
 /**
  * Resolve the live price for a plan: DB row if one exists, else the static
  * PLAN_PRICING fallback from limits.ts. Never throws — a missing/empty
- * table degrades to the same prices the app always shipped with.
+ * table, OR the database being entirely unreachable (e.g. `next build`'s
+ * static prerendering of `/`, which runs with no DATABASE_URL in CI —
+ * 2026-08-24 build-break fix), degrades to the same prices the app always
+ * shipped with. Only the read paths degrade like this; setPlanPricing()
+ * (an explicit admin write) still throws on a DB failure as normal.
  */
 export async function getPlanPricing(plan: Plan): Promise<ResolvedPlanPricing> {
-  const row = await prisma.planPricing.findUnique({ where: { plan } });
-  if (row) {
-    return {
-      label: PLAN_PRICING[plan].label,
-      priceFcfa: row.priceFcfa,
-      originalPriceFcfa: row.originalPriceFcfa,
-      isOverride: true,
-    };
+  try {
+    const row = await prisma.planPricing.findUnique({ where: { plan } });
+    if (row) {
+      return {
+        label: PLAN_PRICING[plan].label,
+        priceFcfa: row.priceFcfa,
+        originalPriceFcfa: row.originalPriceFcfa,
+        isOverride: true,
+      };
+    }
+  } catch (err) {
+    log.warn('getPlanPricing: DB unreachable, falling back to static PLAN_PRICING', {
+      plan,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
   return { ...PLAN_PRICING[plan], isOverride: false };
 }
@@ -41,8 +55,18 @@ export async function getPlanPricing(plan: Plan): Promise<ResolvedPlanPricing> {
 /** All plans' resolved pricing in one call — used by the admin pricing page
  * and anywhere that needs the full table (e.g. the pricing grid). */
 export async function getAllPlanPricing(): Promise<Record<Plan, ResolvedPlanPricing>> {
-  const rows = await prisma.planPricing.findMany();
-  const byPlan = new Map(rows.map((r) => [r.plan, r]));
+  let byPlan = new Map<
+    string,
+    { plan: string; priceFcfa: number; originalPriceFcfa: number | null }
+  >();
+  try {
+    const rows = await prisma.planPricing.findMany();
+    byPlan = new Map(rows.map((r) => [r.plan, r]));
+  } catch (err) {
+    log.warn('getAllPlanPricing: DB unreachable, falling back to static PLAN_PRICING', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
   const entries = (Object.keys(PLAN_PRICING) as Plan[]).map((plan) => {
     const row = byPlan.get(plan);
     const resolved: ResolvedPlanPricing = row
