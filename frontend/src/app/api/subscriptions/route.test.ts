@@ -29,7 +29,7 @@ function makeGet(): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mockRequireCallerOrg.mockResolvedValue(callerCtx);
-  mockListConfigured.mockReturnValue(['STRIPE']);
+  mockListConfigured.mockResolvedValue(['STRIPE']);
 });
 
 describe('GET /api/subscriptions', () => {

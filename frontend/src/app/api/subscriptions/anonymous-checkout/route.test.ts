@@ -54,7 +54,7 @@ beforeEach(() => {
 
 describe('GET /api/subscriptions/anonymous-checkout', () => {
   it('returns whichever providers are configured, no auth required', async () => {
-    mockListConfigured.mockReturnValue(['STRIPE']);
+    mockListConfigured.mockResolvedValue(['STRIPE']);
     const res = await GET();
     expect(res.status).toBe(200);
     const body = (await res.json()) as { availableProviders: string[] };
@@ -64,7 +64,7 @@ describe('GET /api/subscriptions/anonymous-checkout', () => {
 
 describe('POST /api/subscriptions/anonymous-checkout', () => {
   it('creates a PENDING intent, calls the provider, and returns the checkoutUrl', async () => {
-    mockGetProvider.mockReturnValue({
+    mockGetProvider.mockResolvedValue({
       name: 'STRIPE',
       isConfigured: () => true,
       createCheckout: vi
@@ -121,7 +121,7 @@ describe('POST /api/subscriptions/anonymous-checkout', () => {
   });
 
   it('marks the intent FAILED and returns 502 when the provider call throws', async () => {
-    mockGetProvider.mockReturnValue({
+    mockGetProvider.mockResolvedValue({
       name: 'STRIPE',
       isConfigured: () => true,
       createCheckout: vi.fn().mockRejectedValue(new Error('Stripe is down')),
@@ -131,6 +131,65 @@ describe('POST /api/subscriptions/anonymous-checkout', () => {
     expect(prismaMock.anonymousSubscriptionIntent.update).toHaveBeenCalledWith({
       where: { id: 'intent_1' },
       data: { status: 'FAILED' },
+    });
+  });
+
+  // 2026-08-22 bug fix regression coverage — mirrors
+  // subscriptions/checkout/route.test.ts's equivalent block. This is the
+  // route the public /subscriptions/checkout page actually calls.
+  describe('coupon discount reaches the provider (2026-08-22 bug fix)', () => {
+    const couponRow = {
+      id: 'coupon_1',
+      code: 'PROMO50',
+      discountType: 'PERCENT',
+      discountValue: 50,
+      appliesToPlan: null,
+      maxRedemptions: null,
+      redeemedCount: 0,
+      active: true,
+      expiresAt: null,
+    };
+
+    it('passes the discountAmount computed from the redeemed coupon to createCheckout', async () => {
+      prismaMock.coupon.findUnique.mockResolvedValue(couponRow as never);
+      prismaMock.coupon.updateMany.mockResolvedValue({ count: 1 } as never);
+      prismaMock.anonymousSubscriptionIntent.create.mockResolvedValue({
+        id: 'intent_1',
+        amount: 4_950,
+      } as never);
+
+      const createCheckout = vi
+        .fn()
+        .mockResolvedValue({ providerRef: 'cs_123', checkoutUrl: 'https://stripe.test/c/cs_123' });
+      mockGetProvider.mockResolvedValue({
+        name: 'STRIPE',
+        isConfigured: () => true,
+        createCheckout,
+      });
+
+      const res = await POST(makePost({ ...validBody, couponCode: 'promo50' }));
+
+      expect(res.status).toBe(201);
+      expect(createCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 4_950, discountAmount: 4_950 }),
+      );
+    });
+
+    it('400s COUPON_UNSUPPORTED_FOR_PROVIDER for CHARIOW + a coupon, before creating any intent', async () => {
+      mockGetProvider.mockResolvedValue({
+        name: 'CHARIOW',
+        isConfigured: () => true,
+        createCheckout: vi.fn(),
+      });
+
+      const res = await POST(
+        makePost({ ...validBody, provider: 'CHARIOW', couponCode: 'PROMO50' }),
+      );
+
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe('COUPON_UNSUPPORTED_FOR_PROVIDER');
+      expect(prismaMock.anonymousSubscriptionIntent.create).not.toHaveBeenCalled();
     });
   });
 });

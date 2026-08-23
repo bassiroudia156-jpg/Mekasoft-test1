@@ -78,7 +78,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     let provider;
     try {
-      provider = getSubscriptionProvider(providerName);
+      provider = await getSubscriptionProvider(providerName);
     } catch (err) {
       if (err instanceof SubscriptionProviderUnconfiguredError) {
         return NextResponse.json(
@@ -98,6 +98,26 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           error: 'PHONE_REQUIRED',
           message:
             'Un numéro de téléphone est requis pour payer par mobile money. Ajoutez-le dans Mon profil > Atelier.',
+        },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    // 2026-08-22 bug fix — Chariow has no API for a custom checkout amount
+    // (Chariow.md §6 "Pas d'override de prix" / "Jamais de montant custom"):
+    // it always bills the price of the product configured in ITS OWN
+    // dashboard, and the only discount mechanism is a `discount_code`
+    // pre-created there too — our internal Coupon codes have no such
+    // mapping. Silently accepting a coupon here would reproduce the exact
+    // "price drops on screen, full price charged at payment" bug this fix
+    // addresses for Stripe. Reject up front instead, before burning a
+    // redemption slot.
+    if (providerName === 'CHARIOW' && couponCode) {
+      return NextResponse.json(
+        {
+          error: 'COUPON_UNSUPPORTED_FOR_PROVIDER',
+          message:
+            'Les codes promo ne sont pas encore pris en charge pour ce moyen de paiement. Payez par carte ou retirez le code promo.',
         },
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
@@ -174,6 +194,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // discount if one was applied (payment.amount, not the sticker
         // pricing.priceFcfa, which would silently ignore the discount).
         amount: payment.amount,
+        // 2026-08-22 — how much of that discount to actually apply at the
+        // provider (see SubscriptionCheckoutInput.discountAmount). 0 when
+        // no coupon was redeemed; harmless no-op for providers that ignore it.
+        discountAmount: pricing.priceFcfa - payment.amount,
         currency: 'XOF',
         customerEmail,
         customerName: org.name,

@@ -1,37 +1,71 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const findUnique = vi.fn();
-const create = vi.fn();
-const update = vi.fn();
-const paymentFindUnique = vi.fn();
-const subscriptionUpsert = vi.fn();
-const subscriptionFindUnique = vi.fn();
-const orgUpdate = vi.fn();
-const orgFindUnique = vi.fn();
-const paymentCreate = vi.fn();
-const paymentUpdate = vi.fn();
-const anonymousIntentFindUnique = vi.fn();
-const anonymousIntentUpdate = vi.fn();
+// 2026-08-22: hoisted (not plain top-level `const`) — chariow.ts's mock
+// factory below does an async `vi.importActual` of the real module, which
+// now transitively imports credentials.ts → @/lib/server/prisma. That
+// eagerly resolves this file's own `@/lib/server/prisma` mock factory
+// before Vitest reaches this file's ordinary top-level statements,
+// throwing "Cannot access '$transaction' before initialization" on a
+// plain `const`. `vi.hoisted()` guarantees these exist before ANY
+// `vi.mock()` factory runs, regardless of that ordering.
+const {
+  findUnique,
+  paymentFindUnique,
+  subscriptionUpsert,
+  subscriptionFindUnique,
+  orgUpdate,
+  orgFindUnique,
+  anonymousIntentFindUnique,
+  anonymousIntentUpdate,
+  $transaction,
+} = vi.hoisted(() => {
+  const findUnique = vi.fn();
+  const paymentFindUnique = vi.fn();
+  const subscriptionUpsert = vi.fn();
+  const subscriptionFindUnique = vi.fn();
+  const orgUpdate = vi.fn();
+  const orgFindUnique = vi.fn();
+  const anonymousIntentFindUnique = vi.fn();
+  const anonymousIntentUpdate = vi.fn();
+  const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      webhookLog: { findUnique, create: vi.fn(), update: vi.fn() },
+      subscriptionPayment: {
+        findUnique: paymentFindUnique,
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      subscription: { upsert: subscriptionUpsert, findUnique: subscriptionFindUnique },
+      organization: { update: orgUpdate, findUnique: orgFindUnique },
+      anonymousSubscriptionIntent: {
+        findUnique: anonymousIntentFindUnique,
+        update: anonymousIntentUpdate,
+      },
+    }),
+  );
+  return {
+    findUnique,
+    paymentFindUnique,
+    subscriptionUpsert,
+    subscriptionFindUnique,
+    orgUpdate,
+    orgFindUnique,
+    anonymousIntentFindUnique,
+    anonymousIntentUpdate,
+    $transaction,
+  };
+});
 
-const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
-  fn({
-    webhookLog: { findUnique, create, update },
-    subscriptionPayment: {
-      findUnique: paymentFindUnique,
-      create: paymentCreate,
-      update: paymentUpdate,
-    },
-    subscription: { upsert: subscriptionUpsert, findUnique: subscriptionFindUnique },
-    organization: { update: orgUpdate, findUnique: orgFindUnique },
-    anonymousSubscriptionIntent: {
-      findUnique: anonymousIntentFindUnique,
-      update: anonymousIntentUpdate,
-    },
-  }),
-);
-
-vi.mock('@/lib/server/prisma', () => ({ prisma: { $transaction } }));
+vi.mock('@/lib/server/prisma', () => ({
+  prisma: {
+    $transaction,
+    // No DB override configured — getChariowCredentials() falls through to
+    // the CHARIOW_WEBHOOK_SECRET env var this file stubs below, matching
+    // how these tests already exercise the env-var-only path.
+    paymentProviderCredential: { findUnique: vi.fn().mockResolvedValue(null) },
+  },
+}));
 vi.mock('@/lib/server/queues/email-queue-singleton', () => ({
   getEmailQueue: vi.fn(() => null),
 }));

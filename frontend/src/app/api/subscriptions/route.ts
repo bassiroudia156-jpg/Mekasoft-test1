@@ -30,7 +30,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
 
     return NextResponse.json(
-      { subscription: sub, availableProviders: listConfiguredProviders() },
+      { subscription: sub, availableProviders: await listConfiguredProviders() },
       { headers: { 'x-request-id': ctx.requestId } },
     );
   });

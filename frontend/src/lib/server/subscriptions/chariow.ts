@@ -6,13 +6,20 @@
 //
 // Single-tenant: MekaSoft has ONE Chariow account (Chariow.md §1's "compte
 // plateforme unique" variant, not the per-creator BYOK variant the doc
-// leads with) — CHARIOW_API_KEY is a plain env var, not an encrypted
-// per-org credential.
+// leads with).
+//
+// 2026-08-22: credentials now resolve through credentials.ts's
+// getChariowCredentials() — a DB override (set from /admin/integrations)
+// wins over the CHARIOW_* env vars when present, same override-with-
+// fallback shape as plans/pricing.ts. This is why isConfigured/
+// createCheckout/getChariowSale below all became async where they weren't
+// before (a plain env-var read didn't need to be).
 import 'server-only';
 import { timingSafeEqual } from 'node:crypto';
 import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
 import type { WebhookProvider } from '../webhook/handler';
 import { createLogger } from '../logger';
+import { getChariowCredentials } from './credentials';
 import type {
   SubscriptionCheckoutInput,
   SubscriptionCheckoutResult,
@@ -23,19 +30,16 @@ const log = createLogger();
 const CHARIOW_API_URL = process.env.CHARIOW_API_URL || 'https://api.chariow.com/v1';
 const FETCH_TIMEOUT_MS = 15_000;
 
-function productIdForPlan(plan: 'PRO' | 'BUSINESS'): string | null {
-  const id =
-    plan === 'PRO' ? process.env.CHARIOW_PRODUCT_ID_PRO : process.env.CHARIOW_PRODUCT_ID_BUSINESS;
-  return id && id.length > 0 ? id : null;
+function productIdForPlan(
+  plan: 'PRO' | 'BUSINESS',
+  creds: { productIdPro: string | null; productIdBusiness: string | null },
+): string | null {
+  return plan === 'PRO' ? creds.productIdPro : creds.productIdBusiness;
 }
 
-function isConfigured(): boolean {
-  return !!(
-    process.env.CHARIOW_API_KEY &&
-    process.env.CHARIOW_WEBHOOK_SECRET &&
-    process.env.CHARIOW_PRODUCT_ID_PRO &&
-    process.env.CHARIOW_PRODUCT_ID_BUSINESS
-  );
+async function isConfigured(): Promise<boolean> {
+  const creds = await getChariowCredentials();
+  return !!(creds.apiKey && creds.webhookSecret && creds.productIdPro && creds.productIdBusiness);
 }
 
 async function chariowFetch(path: string, init: RequestInit): Promise<Response> {
@@ -80,10 +84,11 @@ export const chariowSubscriptionProvider: SubscriptionProvider = {
   isConfigured,
 
   async createCheckout(input: SubscriptionCheckoutInput): Promise<SubscriptionCheckoutResult> {
-    const apiKey = process.env.CHARIOW_API_KEY;
+    const creds = await getChariowCredentials();
+    const apiKey = creds.apiKey;
     if (!apiKey) throw new Error('Chariow not configured');
-    const productId = productIdForPlan(input.plan);
-    if (!productId) throw new Error(`No CHARIOW_PRODUCT_ID configured for plan ${input.plan}`);
+    const productId = productIdForPlan(input.plan, creds);
+    if (!productId) throw new Error(`No Chariow product id configured for plan ${input.plan}`);
 
     const { first, last } = splitName(input.customerName, input.customerEmail);
     const phone = input.customerPhone ? resolveChariowPhone(input.customerPhone) : null;
@@ -152,7 +157,7 @@ export function mapChariowStatus(rawStatus: string): ChariowNormalizedStatus {
 export async function getChariowSale(
   saleId: string,
 ): Promise<{ status: ChariowNormalizedStatus; amount?: number; currency?: string } | null> {
-  const apiKey = process.env.CHARIOW_API_KEY;
+  const apiKey = (await getChariowCredentials()).apiKey;
   if (!apiKey) return null;
 
   const res = await chariowFetch(`/sales/${encodeURIComponent(saleId)}`, {

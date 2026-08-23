@@ -60,7 +60,7 @@ const limiter = createEmailLimiter(redis ? { redis } : {}, {
  * already returned to authenticated callers via GET /api/subscriptions),
  * so the anonymous payment picker doesn't offer a dead Mobile Money button. */
 export async function GET(): Promise<NextResponse> {
-  return NextResponse.json({ availableProviders: listConfiguredProviders() });
+  return NextResponse.json({ availableProviders: await listConfiguredProviders() });
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     let provider;
     try {
-      provider = getSubscriptionProvider(providerName);
+      provider = await getSubscriptionProvider(providerName);
     } catch (err) {
       if (err instanceof SubscriptionProviderUnconfiguredError) {
         return NextResponse.json(
@@ -92,6 +92,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         );
       }
       throw err;
+    }
+
+    // 2026-08-22 bug fix — same guard as checkout/route.ts: Chariow has no
+    // API for a custom checkout amount or arbitrary discount (Chariow.md §6),
+    // only a `discount_code` pre-created in Chariow's own dashboard, which
+    // our internal Coupon codes don't map to. Reject up front rather than
+    // silently charge full price after showing a discounted total.
+    if (providerName === 'CHARIOW' && couponCode) {
+      return NextResponse.json(
+        {
+          error: 'COUPON_UNSUPPORTED_FOR_PROVIDER',
+          message:
+            'Les codes promo ne sont pas encore pris en charge pour ce moyen de paiement. Payez par carte ou retirez le code promo.',
+        },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
     }
 
     const pricing = await getPlanPricing(plan);
@@ -160,6 +176,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         plan,
         // Actual charge, reflects any redeemed coupon discount.
         amount: intent.amount,
+        // 2026-08-22 — see SubscriptionCheckoutInput.discountAmount.
+        discountAmount: pricing.priceFcfa - intent.amount,
         currency: 'XOF',
         customerEmail: email,
         customerName: atelierName,

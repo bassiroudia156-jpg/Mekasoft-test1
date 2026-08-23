@@ -68,7 +68,7 @@ beforeEach(() => {
 
 describe('POST /api/subscriptions/checkout', () => {
   it('creates a PENDING SubscriptionPayment row, calls the provider, and returns the checkoutUrl', async () => {
-    mockGetProvider.mockReturnValue({
+    mockGetProvider.mockResolvedValue({
       name: 'STRIPE',
       isConfigured: () => true,
       createCheckout: vi
@@ -132,7 +132,7 @@ describe('POST /api/subscriptions/checkout', () => {
 
   it('400s PHONE_REQUIRED for MONEROO/CHARIOW when the org has no phone on file', async () => {
     prismaMock.organization.findUnique.mockResolvedValueOnce({ ...orgRow, phone: null } as never);
-    mockGetProvider.mockReturnValue({
+    mockGetProvider.mockResolvedValue({
       name: 'CHARIOW',
       isConfigured: () => true,
       createCheckout: vi.fn(),
@@ -145,7 +145,7 @@ describe('POST /api/subscriptions/checkout', () => {
   });
 
   it('marks the SubscriptionPayment row FAILED and returns 502 when the provider call throws', async () => {
-    mockGetProvider.mockReturnValue({
+    mockGetProvider.mockResolvedValue({
       name: 'STRIPE',
       isConfigured: () => true,
       createCheckout: vi.fn().mockRejectedValue(new Error('Stripe is down')),
@@ -165,5 +165,64 @@ describe('POST /api/subscriptions/checkout', () => {
     const res = await POST(makePost({ plan: 'PRO', provider: 'STRIPE' }));
     expect(res.status).toBe(404);
     expect(prismaMock.organization.findUnique).not.toHaveBeenCalled();
+  });
+
+  // 2026-08-22 bug fix regression coverage — see stripe.ts's createCheckout
+  // comment: a redeemed coupon used to compute a discounted `amount` but
+  // never actually reach the provider charge.
+  describe('coupon discount reaches the provider (2026-08-22 bug fix)', () => {
+    const couponRow = {
+      id: 'coupon_1',
+      code: 'PROMO50',
+      discountType: 'PERCENT',
+      discountValue: 50,
+      appliesToPlan: null,
+      maxRedemptions: null,
+      redeemedCount: 0,
+      active: true,
+      expiresAt: null,
+    };
+
+    it('passes the discountAmount computed from the redeemed coupon to createCheckout', async () => {
+      prismaMock.coupon.findUnique.mockResolvedValue(couponRow as never);
+      prismaMock.coupon.updateMany.mockResolvedValue({ count: 1 } as never);
+      prismaMock.subscriptionPayment.create.mockResolvedValue({
+        id: 'sp_1',
+        amount: 4_950,
+      } as never);
+
+      const createCheckout = vi
+        .fn()
+        .mockResolvedValue({ providerRef: 'cs_123', checkoutUrl: 'https://stripe.test/c/cs_123' });
+      mockGetProvider.mockResolvedValue({
+        name: 'STRIPE',
+        isConfigured: () => true,
+        createCheckout,
+      });
+
+      const res = await POST(makePost({ plan: 'PRO', provider: 'STRIPE', couponCode: 'promo50' }));
+
+      expect(res.status).toBe(201);
+      expect(createCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 4_950, discountAmount: 4_950 }),
+      );
+    });
+
+    it('400s COUPON_UNSUPPORTED_FOR_PROVIDER for CHARIOW + a coupon, before creating any row', async () => {
+      // orgRow (set in beforeEach) already has a phone on file, so this
+      // exercises the new coupon guard rather than the PHONE_REQUIRED one.
+      mockGetProvider.mockResolvedValue({
+        name: 'CHARIOW',
+        isConfigured: () => true,
+        createCheckout: vi.fn(),
+      });
+
+      const res = await POST(makePost({ plan: 'PRO', provider: 'CHARIOW', couponCode: 'PROMO50' }));
+
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe('COUPON_UNSUPPORTED_FOR_PROVIDER');
+      expect(prismaMock.subscriptionPayment.create).not.toHaveBeenCalled();
+    });
   });
 });

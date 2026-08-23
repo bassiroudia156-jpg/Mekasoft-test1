@@ -28,6 +28,22 @@ export interface SubscriptionCheckoutInput {
   /** FCFA, integer — from PLAN_PRICING[plan].priceFcfa. */
   amount: number;
   currency: string;
+  /**
+   * FCFA, integer — set only when a coupon was redeemed: the amount OFF the
+   * plan's full price (pricing.priceFcfa - amount), not the discounted
+   * price itself. 2026-08-22 bug fix: Stripe and Chariow both bill against
+   * a fixed Price/Product object configured in the provider's own
+   * dashboard (`amount` above was computed but never actually reached the
+   * charge), so a redeemed coupon silently had zero effect on what the
+   * customer paid. Stripe now applies this as a one-time Coupon scoped to
+   * just the Checkout Session (see stripe.ts); Chariow has no API for a
+   * custom discount at all (Chariow.md §6 "Pas d'override de prix" —
+   * discounts there only work via a `discount_code` pre-created in
+   * Chariow's own dashboard), so the checkout routes reject
+   * CHARIOW + couponCode up front rather than repeat this bug. Ignored by
+   * Moneroo, which already charges `amount` directly.
+   */
+  discountAmount?: number;
   customerEmail: string;
   customerName?: string;
   /** E.164 phone — required by Moneroo/Chariow, unused by Stripe. */
@@ -52,7 +68,11 @@ export interface SubscriptionCheckoutResult {
  */
 export interface SubscriptionProvider {
   name: SubscriptionProviderName;
-  /** False when required env vars are missing — routes translate this to 503. */
-  isConfigured(): boolean;
+  /** False when required credentials are missing — routes translate this
+   * to 503. Stripe/Moneroo check env vars only (sync); Chariow (2026-08-22)
+   * also checks its admin-editable DB override, so it's async — `boolean |
+   * Promise<boolean>` lets every caller just `await` this uniformly
+   * without forcing the two sync providers to wrap a value in a Promise. */
+  isConfigured(): boolean | Promise<boolean>;
   createCheckout(input: SubscriptionCheckoutInput): Promise<SubscriptionCheckoutResult>;
 }

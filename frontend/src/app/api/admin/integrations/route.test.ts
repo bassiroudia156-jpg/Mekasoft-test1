@@ -2,6 +2,16 @@
 // panel. Reports `configured` from env-var PRESENCE only (never leaks a
 // value) plus a live Redis PING. Mirrors admin/rate-limits/route.test.ts's
 // approach of swapping the `redis` export via a mutable holder.
+//
+// 2026-08-23: the route now transitively calls getChariowCredentialsStatus()
+// (credentials.ts), which reads @/lib/server/prisma. Without prismaMock,
+// this file silently hit the REAL configured DATABASE_URL — harmless while
+// no PaymentProviderCredential row existed, but the moment a real admin
+// saved real Chariow credentials via /admin/integrations, these tests
+// started reading that live row instead of the env vars they set, and
+// failed. prismaMock (imported first, per its own file comment) mocks
+// @/lib/server/prisma before route.ts's import chain resolves it.
+import { prismaMock } from '@/test-utils/prisma-mock';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -44,6 +54,9 @@ const ENV_KEYS = [
   'STRIPE_SECRET_KEY',
   'MONEROO_SECRET_KEY',
   'CHARIOW_API_KEY',
+  'CHARIOW_WEBHOOK_SECRET',
+  'CHARIOW_PRODUCT_ID_PRO',
+  'CHARIOW_PRODUCT_ID_BUSINESS',
   'CLOUDINARY_CLOUD_NAME',
   'CLOUDINARY_API_KEY',
   'RESEND_API_KEY',
@@ -54,6 +67,7 @@ const ENV_KEYS = [
   'UPSTASH_REDIS_REST_URL',
   'SENTRY_DSN',
   'NEXT_PUBLIC_SENTRY_DSN',
+  'APP_URL',
 ] as const;
 const originalEnv: Record<string, string | undefined> = {};
 
@@ -62,6 +76,11 @@ beforeEach(() => {
   mockRequireSuperadmin.mockResolvedValue(superadminCtx);
   mockRateLimit.mockResolvedValue(null);
   redisHolder.current = null;
+  // No DB override configured — every test below exercises the env-var
+  // fallback path (getChariowCredentialsStatus() falls through to
+  // process.env.CHARIOW_* when no row exists), matching what each test
+  // actually sets up via ENV_KEYS.
+  prismaMock.paymentProviderCredential.findUnique.mockResolvedValue(null);
   for (const key of ENV_KEYS) {
     originalEnv[key] = process.env[key];
     delete process.env[key];
@@ -110,6 +129,52 @@ describe('GET /api/admin/integrations', () => {
     const res2 = await GET(makeGet());
     const body2 = (await res2.json()) as { integrations: { id: string; configured: boolean }[] };
     expect(body2.integrations.find((i) => i.id === 'cloudinary')?.configured).toBe(true);
+  });
+
+  it('chariow requires ALL FOUR env vars — API key alone is NOT enough (2026-08-22 prod incident)', async () => {
+    // The actual bug: CHARIOW_API_KEY was mistaken for the webhook secret
+    // in Chariow's Pulse URL, so every incoming webhook 401'd. Before this
+    // fix, `configured` only checked CHARIOW_API_KEY and would have
+    // (wrongly) shown "Configuré" the whole time despite Pulse being
+    // broken — this pins the route to the same 4-var check the actual
+    // provider (chariow.ts's isConfigured) already requires.
+    process.env.CHARIOW_API_KEY = 'sk_live_xxx';
+    const res = await GET(makeGet());
+    const body = (await res.json()) as { integrations: { id: string; configured: boolean }[] };
+    expect(body.integrations.find((i) => i.id === 'chariow')?.configured).toBe(false);
+
+    process.env.CHARIOW_WEBHOOK_SECRET = 'whsecret';
+    process.env.CHARIOW_PRODUCT_ID_PRO = 'prd_pro';
+    process.env.CHARIOW_PRODUCT_ID_BUSINESS = 'prd_biz';
+    const res2 = await GET(makeGet());
+    const body2 = (await res2.json()) as { integrations: { id: string; configured: boolean }[] };
+    expect(body2.integrations.find((i) => i.id === 'chariow')?.configured).toBe(true);
+  });
+
+  it('omits webhookUrl entirely when CHARIOW_WEBHOOK_SECRET is unset', async () => {
+    process.env.CHARIOW_API_KEY = 'sk_live_xxx';
+    const res = await GET(makeGet());
+    const body = (await res.json()) as { integrations: { id: string; webhookUrl?: string }[] };
+    expect(body.integrations.find((i) => i.id === 'chariow')?.webhookUrl).toBeUndefined();
+  });
+
+  it('exposes a correctly URL-encoded webhookUrl built from the real secret, not a typo-prone hand-copy', async () => {
+    process.env.APP_URL = 'https://mekasoft.app';
+    process.env.CHARIOW_WEBHOOK_SECRET = '2P7H4WBKqYLxIRhjjcXXibR1PTtip+SLAwQ1j7dVU8U=';
+    const res = await GET(makeGet());
+    const body = (await res.json()) as { integrations: { id: string; webhookUrl?: string }[] };
+    expect(body.integrations.find((i) => i.id === 'chariow')?.webhookUrl).toBe(
+      'https://mekasoft.app/api/webhooks/subscriptions/chariow?secret=2P7H4WBKqYLxIRhjjcXXibR1PTtip%2BSLAwQ1j7dVU8U%3D',
+    );
+  });
+
+  it('falls back to localhost:3000 for webhookUrl when APP_URL is unset', async () => {
+    process.env.CHARIOW_WEBHOOK_SECRET = 'whsecret';
+    const res = await GET(makeGet());
+    const body = (await res.json()) as { integrations: { id: string; webhookUrl?: string }[] };
+    expect(body.integrations.find((i) => i.id === 'chariow')?.webhookUrl).toBe(
+      'http://localhost:3000/api/webhooks/subscriptions/chariow?secret=whsecret',
+    );
   });
 
   it('pings Redis live and reports healthy: true on success', async () => {

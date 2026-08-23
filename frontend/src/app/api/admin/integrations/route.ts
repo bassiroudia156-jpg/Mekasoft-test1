@@ -2,9 +2,17 @@
 // every external provider this project wires. Reports configured/not
 // configured from env-var PRESENCE only — never the values themselves —
 // plus a live ping for the one provider cheap enough to check on every
-// request (Redis). Deliberately does NOT let the admin type API keys into
-// a form: secrets stay in Vercel env vars, not the database, so this page
-// can't become a credentials-leak surface.
+// request (Redis).
+//
+// 2026-08-22: Chariow is the one exception to "no credentials form" — see
+// credentials.ts's file comment for why (its webhook auth is a shared
+// secret placed directly in the callback URL, no HMAC, and a human pasting
+// the wrong value there is a real failure mode that already happened in
+// prod). Its status here is DB-override-aware (getChariowCredentialsStatus)
+// and only ever exposes a masked last-4 hint + the composed webhook URL —
+// never a plaintext secret. Editing happens via PATCH
+// /api/admin/payment-credentials (see admin/integrations/page.tsx).
+// Every other provider stays env-var-only, unchanged.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -12,6 +20,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireSuperadmin } from '@/lib/server/middleware';
 import { enforceAdminRateLimit } from '@/lib/server/middleware/rate-limit-by-userid';
 import { redis } from '@/lib/server/redis';
+import { getChariowCredentialsStatus } from '@/lib/server/subscriptions/credentials';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 
 interface IntegrationStatus {
@@ -21,6 +30,14 @@ interface IntegrationStatus {
   /** null = no live check attempted (env-presence only). */
   healthy: boolean | null;
   detail: string;
+  /** Chariow only — true when the DB override (not env vars) is the
+   * active source, i.e. an admin set it from the dashboard. */
+  isOverride?: boolean;
+  /** Chariow only — the exact "Pulse" webhook URL to paste into Chariow's
+   * dashboard, built server-side from the real webhook secret. Copy it,
+   * never hand-type it — see credentials.ts's file comment for why that
+   * matters here specifically. */
+  webhookUrl?: string;
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -42,6 +59,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       }
     }
 
+    const chariow = await getChariowCredentialsStatus();
+
     const integrations: IntegrationStatus[] = [
       {
         id: 'stripe',
@@ -60,9 +79,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       {
         id: 'chariow',
         label: 'Chariow (Mobile Money)',
-        configured: Boolean(process.env.CHARIOW_API_KEY),
+        configured: chariow.configured,
         healthy: null,
         detail: 'Abonnements Pro/Business — paiement mobile money (fallback).',
+        isOverride: chariow.isOverride,
+        ...(chariow.webhookUrl ? { webhookUrl: chariow.webhookUrl } : {}),
       },
       {
         id: 'cloudinary',

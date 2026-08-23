@@ -22,6 +22,7 @@ import {
   getChariowSale,
   timingSafeEqualStrings,
 } from '@/lib/server/subscriptions/chariow';
+import { getChariowCredentials } from '@/lib/server/subscriptions/credentials';
 import { activateSubscription } from '@/lib/server/subscriptions/fulfillment';
 import { resolveOrganizationForAnonymousIntent } from '@/lib/server/subscriptions/anonymous';
 import { isPayablePlan } from '@/lib/server/subscriptions/types';
@@ -196,7 +197,13 @@ const chariowHandler = createWebhookHandler({
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const secret = req.nextUrl.searchParams.get('secret') ?? '';
-  const expected = process.env.CHARIOW_WEBHOOK_SECRET ?? '';
+  // 2026-08-22: reads the DB-aware credential (admin override wins over
+  // CHARIOW_WEBHOOK_SECRET) instead of the env var directly — see
+  // credentials.ts. Getting this specific check wrong is exactly the
+  // 2026-08-22 incident: Chariow's Pulse URL had the wrong secret pasted
+  // in, every call landed here and 401'd, and Chariow auto-disabled Pulse
+  // after enough failures ("Your pulse does not respond").
+  const expected = (await getChariowCredentials()).webhookSecret ?? '';
   if (!expected || !timingSafeEqualStrings(secret, expected)) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
   }
