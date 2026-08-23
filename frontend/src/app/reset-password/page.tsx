@@ -23,6 +23,11 @@ function ResetPasswordBody() {
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // 2026-08-24 — arrived via the emailed link (both params present): the
+  // code is already in hand, no need to make the user copy it back in.
+  // Fall back to showing the fields (unchanged behavior) if either is
+  // missing — e.g. someone bookmarked /reset-password directly.
+  const [arrivedViaLink] = useState(() => Boolean(params.get('email') && params.get('code')));
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -58,26 +63,35 @@ function ResetPasswordBody() {
           </div>
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
-            <Field
-              label="Adresse email"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={setEmail}
-              placeholder="votre@email.com"
-            />
-            <Field
-              label="Code de réinitialisation"
-              name="code"
-              type="text"
-              required
-              value={code}
-              onChange={(v) => setCode(v.toUpperCase())}
-              placeholder="XXXXXXXX"
-              helper="8 caractères — copié depuis l'email reçu."
-            />
+            {arrivedViaLink ? (
+              <div className="bg-muted/20 rounded-lg px-4 py-3 border border-border">
+                <p className="text-xs text-muted-foreground">Réinitialisation pour</p>
+                <p className="text-sm font-medium text-foreground">{email}</p>
+              </div>
+            ) : (
+              <>
+                <Field
+                  label="Adresse email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={setEmail}
+                  placeholder="votre@email.com"
+                />
+                <Field
+                  label="Code de réinitialisation"
+                  name="code"
+                  type="text"
+                  required
+                  value={code}
+                  onChange={(v) => setCode(v.toUpperCase())}
+                  placeholder="XXXXXXXX"
+                  helper="8 caractères — copié depuis l'email reçu."
+                />
+              </>
+            )}
             <Field
               label="Nouveau mot de passe"
               name="newPassword"

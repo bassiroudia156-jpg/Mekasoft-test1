@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { verificationEmail, resetPasswordEmail } from './email-templates';
 
 describe('verificationEmail', () => {
@@ -66,6 +66,10 @@ describe('verificationEmail', () => {
 });
 
 describe('resetPasswordEmail', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('returns { subject, html, text } all non-empty', () => {
     const t = resetPasswordEmail({ code: 'WXYZ9876', email: 'a@b.com' });
     expect(t.subject).toBeTruthy();
@@ -73,10 +77,29 @@ describe('resetPasswordEmail', () => {
     expect(t.text).toBeTruthy();
   });
 
-  it('embeds the code in both html and text', () => {
+  // 2026-08-24, explicit user request — the email must deliver a clickable
+  // link, not a bare code to retype. The code is still embedded (as the
+  // link's ?code= param, consumed by /reset-password/page.tsx), but it must
+  // never appear on its own outside a URL.
+  it('embeds a clickable reset link (not a bare code) in the html, and the link in the text', () => {
+    vi.stubEnv('APP_URL', 'https://mekasoft.app');
     const t = resetPasswordEmail({ code: 'WXYZ9876', email: 'a@b.com' });
-    expect(t.html).toContain('WXYZ9876');
-    expect(t.text).toContain('WXYZ9876');
+    const expectedUrl = 'https://mekasoft.app/reset-password?email=a%40b.com&code=WXYZ9876';
+    // html is HTML-escaped for the attribute (& -> &amp;); text is the raw URL.
+    expect(t.html).toContain(`href="${expectedUrl.replace('&', '&amp;')}"`);
+    expect(t.text).toContain(expectedUrl);
+  });
+
+  it('URL-encodes the email and code query params', () => {
+    vi.stubEnv('APP_URL', 'https://mekasoft.app');
+    const t = resetPasswordEmail({ code: 'WXYZ9876', email: 'a+test@b.com' });
+    expect(t.html).toContain('email=a%2Btest%40b.com');
+  });
+
+  it('falls back to localhost:3000 when APP_URL is unset', () => {
+    vi.stubEnv('APP_URL', '');
+    const t = resetPasswordEmail({ code: 'WXYZ9876', email: 'a@b.com' });
+    expect(t.text).toContain('http://localhost:3000/reset-password?email=a%40b.com&code=WXYZ9876');
   });
 
   it('subject matches expected', () => {

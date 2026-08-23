@@ -24,7 +24,7 @@
 // rendered TTL matches `AUTH_VERIFICATION_TTL_MIN` (was hardcoded "15 minutes"
 // which lied when operators tuned the env var).
 import 'server-only';
-import { brandedEmailHtml } from '../email-brand';
+import { brandedEmailHtml, brandButton } from '../email-brand';
 
 export interface EmailTemplate {
   subject: string;
@@ -97,14 +97,25 @@ export function verificationEmail(args: VerificationEmailArgs): EmailTemplate {
   };
 }
 
+// 2026-08-24, explicit user request — the recovery UI (/forgot-password,
+// RecoverySentPanel: "Cliquez sur le lien", "Le lien est valide 30
+// minutes") always promised a clickable link, and /reset-password/page.tsx
+// already reads `?email=&code=` off the URL to pre-fill the form. This
+// template was the one piece still lagging behind: it rendered the raw
+// code as text to copy instead of the link the rest of the flow describes.
+// The underlying secret (the same 8-char VERIFICATION_CODE_REGEX code,
+// same TTL, same single-use /api/auth/reset-password check) is unchanged —
+// only how it's delivered changes, from "read + retype" to "click".
 export function resetPasswordEmail(args: ResetPasswordEmailArgs): EmailTemplate {
-  const code = htmlEscape(args.code);
   const ttl = ttlWording(args.expiresAt);
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const resetUrl = `${appUrl}/reset-password?email=${encodeURIComponent(args.email)}&code=${encodeURIComponent(args.code)}`;
+  const escapedUrl = htmlEscape(resetUrl);
   return {
     subject: 'Réinitialisation de votre mot de passe MekaSoft',
     html: brandedEmailHtml(
-      `<p>Bonjour,</p><p>Votre code de réinitialisation de mot de passe est <strong style="font-size:20px;letter-spacing:3px;color:#152A4E;">${code}</strong>.</p><p>Il expire ${ttl}. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>`,
+      `<p>Bonjour,</p><p>Vous avez demandé la réinitialisation de votre mot de passe MekaSoft. Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe :</p><p style="margin:20px 0;">${brandButton('Réinitialiser mon mot de passe', escapedUrl)}</p><p>Ce lien expire ${ttl}. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email — votre mot de passe restera inchangé.</p>`,
     ),
-    text: `Votre code de réinitialisation de mot de passe MekaSoft est ${args.code}. Il expire ${ttl}. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.`,
+    text: `Réinitialisez votre mot de passe MekaSoft en ouvrant ce lien : ${resetUrl}\nIl expire ${ttl}. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email — votre mot de passe restera inchangé.`,
   };
 }
