@@ -18,11 +18,18 @@ vi.mock('@/lib/server/auth/dummy-bcrypt', () => ({
 vi.mock('@/lib/server/auth/hibp', () => ({
   isPwned: vi.fn().mockResolvedValue(false),
 }));
+// Security audit fix (2026-08-24, control #12) — defaults to true (inert,
+// matching TURNSTILE_SECRET_KEY being unset) so every pre-existing test
+// above is unaffected; overridden per-test below to exercise the reject path.
+vi.mock('@/lib/server/security/turnstile', () => ({
+  verifyTurnstileToken: vi.fn().mockResolvedValue(true),
+}));
 
 import { POST } from './route';
 import { dummyBcryptCompare } from '@/lib/server/auth/dummy-bcrypt';
 import { isPwned } from '@/lib/server/auth/hibp';
 import { enqueueOutbox } from '@/lib/server/outbox';
+import { verifyTurnstileToken } from '@/lib/server/security/turnstile';
 
 function makeReq(body: unknown): NextRequest {
   // Build init inline so optional fields (body) aren't typed as `T | undefined`,
@@ -152,6 +159,37 @@ describe('POST /api/auth/signup', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('rejects with CAPTCHA_FAILED when verifyTurnstileToken fails, before any DB/password work', async () => {
+    (verifyTurnstileToken as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
+
+    const res = await POST(
+      makeReq({
+        email: 'bot@example.com',
+        password: 'a-strong-passphrase',
+        turnstileToken: 'bad-token',
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('CAPTCHA_FAILED');
+    // Short-circuits before the password-policy gates and the user lookup.
+    expect(isPwned).not.toHaveBeenCalled();
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('allows signup through unaffected when TURNSTILE_SECRET_KEY is unset (inert default)', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({ id: 'u-no-captcha' } as never);
+    prismaMock.verificationCode.create.mockResolvedValue({} as never);
+
+    // No turnstileToken in the body at all — same as today's frontend
+    // before the widget is wired in.
+    const res = await POST(
+      makeReq({ email: 'no-captcha@example.com', password: 'a-strong-passphrase' }),
+    );
+    expect(res.status).toBe(201);
   });
 
   it("source exports runtime = 'nodejs' (Phase 0 guard)", () => {

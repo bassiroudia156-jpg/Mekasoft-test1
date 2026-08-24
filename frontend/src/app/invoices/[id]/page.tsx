@@ -22,6 +22,7 @@ import InvoiceDocument from '@/components/invoices/InvoiceDocument';
 import ResendInvoiceModal from '@/components/invoices/ResendInvoiceModal';
 import { type InvoiceStatus } from '@/components/invoices/InvoiceRow';
 import { SkeletonDocument } from '@/components/ui/Skeleton';
+import { sharePdfViaWhatsApp } from '@/lib/whatsappShare';
 
 interface InvoiceDetail {
   id: string;
@@ -68,6 +69,7 @@ export default function InvoiceDetailPage() {
   const [pendingStatus, setPendingStatus] = useState<InvoiceStatus | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
   const [resendOpen, setResendOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
 
   async function load() {
     try {
@@ -94,6 +96,26 @@ export default function InvoiceDetailPage() {
   });
 
   if (!user) return null;
+
+  // PRD "Partage WhatsApp" (§4.7) — see lib/whatsappShare.ts for why this
+  // exists again after being pulled, and why it's scoped to invoices only.
+  async function shareViaWhatsApp() {
+    if (!invoice) return;
+    setSharing(true);
+    try {
+      const result = await sharePdfViaWhatsApp({
+        pdfUrl: `/api/invoices/${invoice.id}/pdf`,
+        filename: `Facture-${invoice.reference}.pdf`,
+        phone: invoice.client.phone,
+        text: `Bonjour ${invoice.client.name}, voici votre facture ${invoice.reference} (${invoice.amount.toLocaleString('fr-FR')} FCFA) de la part de ${invoice.organization.name}.`,
+      });
+      if (result === 'error') {
+        toast('Impossible de récupérer le PDF pour le moment.', 'error');
+      }
+    } finally {
+      setSharing(false);
+    }
+  }
 
   async function changeStatus(status: InvoiceStatus) {
     if (!invoice) return;
@@ -173,6 +195,15 @@ export default function InvoiceDetailPage() {
                 <Icon i="download" size={14} />
                 Télécharger
               </a>
+              <button
+                type="button"
+                onClick={() => void shareViaWhatsApp()}
+                disabled={sharing}
+                className="text-primary text-sm font-medium flex items-center gap-1 disabled:opacity-50"
+              >
+                <Icon i="share-2" size={14} />
+                {sharing ? 'Partage…' : 'Partager'}
+              </button>
             </div>
           )}
         </div>

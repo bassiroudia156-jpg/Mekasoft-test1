@@ -24,6 +24,7 @@ import { isBanned } from '@/lib/server/auth/banned-passwords';
 import { isPwned } from '@/lib/server/auth/hibp';
 import { dummyBcryptCompare } from '@/lib/server/auth/dummy-bcrypt';
 import { enqueueOutbox } from '@/lib/server/outbox';
+import { verifyTurnstileToken } from '@/lib/server/security/turnstile';
 
 const PASSWORD_MIN = Number(process.env.AUTH_PASSWORD_MIN_LENGTH ?? 10);
 const VERIFICATION_TTL_MS = Number(process.env.AUTH_VERIFICATION_TTL_MIN ?? 15) * 60 * 1000;
@@ -31,6 +32,12 @@ const VERIFICATION_TTL_MS = Number(process.env.AUTH_VERIFICATION_TTL_MIN ?? 15) 
 const Body = z.object({
   email: zEmail,
   password: z.string().min(1),
+  // Security audit fix (2026-08-24, control #12) — optional: absent unless
+  // the frontend renders the Turnstile widget, which itself only renders
+  // when NEXT_PUBLIC_TURNSTILE_SITE_KEY is set. verifyTurnstileToken() is
+  // itself inert (returns true) when TURNSTILE_SECRET_KEY isn't configured,
+  // so this never blocks signup on a fork that hasn't set up Turnstile.
+  turnstileToken: z.string().optional(),
 });
 
 const limiter = createEmailLimiter(redis ? { redis } : {}, {
@@ -59,7 +66,20 @@ export async function POST(req: NextRequest): Promise<Response> {
       res.headers.set('x-request-id', ctx.requestId);
       return res;
     }
-    const { email, password } = parsed.data;
+    const { email, password, turnstileToken } = parsed.data;
+
+    // 1b. Anti-bot check (control #12). Inert (always passes) unless
+    //     TURNSTILE_SECRET_KEY is configured — see turnstile.ts. Runs before
+    //     the password-policy gates (which include an optional HIBP network
+    //     call) so bot traffic is rejected as cheaply as possible.
+    if (!(await verifyTurnstileToken(turnstileToken))) {
+      const res = NextResponse.json(
+        { error: 'CAPTCHA_FAILED', message: 'Anti-bot verification failed.' },
+        { status: 400 },
+      );
+      res.headers.set('x-request-id', ctx.requestId);
+      return res;
+    }
 
     // 2. Password policy gates BEFORE looking up user (D-22 — keep the no-user
     //    and existing-user branches symmetric below).

@@ -19,6 +19,7 @@ import { requireCallerOrg } from '@/lib/server/organizations/require-caller-org'
 import { clampLimit, cursorWhere, buildPage, decodeCursor } from '@/lib/server/pagination/paginate';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { checkClientLimit } from '@/lib/server/plans/guard';
+import { encryptPii } from '@/lib/server/clients/pii-crypto';
 
 const Q_MAX = 200;
 
@@ -196,7 +197,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         ...(data.profession !== undefined ? { profession: data.profession } : {}),
         ...(data.dateOfBirth !== undefined ? { dateOfBirth: new Date(data.dateOfBirth) } : {}),
         ...(data.gender !== undefined ? { gender: data.gender } : {}),
-        ...(data.idNumber !== undefined ? { idNumber: data.idNumber } : {}),
+        // Security audit fix (2026-08-24, control #5) — idNumber (national
+        // ID) is PII; encrypt at rest via the same ENCRYPTION_KEY-backed
+        // AES-256-GCM primitive used for payment credentials. See
+        // lib/server/clients/pii-crypto.ts for the degrade-gracefully
+        // rationale (no ENCRYPTION_KEY → plaintext fallback, never a
+        // blocked write).
+        ...(data.idNumber !== undefined ? { idNumber: encryptPii(data.idNumber) } : {}),
         ...(data.companyName !== undefined ? { companyName: data.companyName } : {}),
         ...(data.taxId !== undefined ? { taxId: data.taxId } : {}),
         ...(data.sector !== undefined ? { sector: data.sector } : {}),

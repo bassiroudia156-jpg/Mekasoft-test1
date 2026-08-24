@@ -25,7 +25,14 @@ model User {
   // set by the user via /api/upload + /api/auth/me PATCH (Phase 8).
   avatarUrl         String?
   // E.164, editable via /api/auth/me PATCH (Phase 8's EditProfileModal).
-  phone             String?
+  // 2026-08-24 — unique (nullable-unique: Postgres allows any number of
+  // NULLs under a unique index, only non-null duplicates are rejected) so
+  // /api/auth/login can look a user up by phone as an alternate to email
+  // (dual login — PRD "téléphone comme identifiant", scoped to login only;
+  // signup still requires email, see login/route.ts's header comment).
+  // /api/auth/me PATCH enforces the same uniqueness at the app layer with a
+  // friendly PHONE_ALREADY_IN_USE error before this constraint would 500.
+  phone             String?   @unique
   // App-wide role. USER is the default; ADMIN unlocks /admin back-office;
   // SUPERADMIN can promote/demote other admins. Bootstrap an initial
   // SUPERADMIN via `pnpm db:make-superadmin <email>` (see scripts).
@@ -879,14 +886,14 @@ model PaymentProviderCredential {
 // being oversold under concurrent checkouts — see
 // lib/server/coupons/redeem.ts.
 model Coupon {
-  id            String  @id @default(cuid())
-  code          String  @unique // stored uppercase, validated case-insensitively at lookup
-  discountType  String // PERCENT | FIXED
-  discountValue Int // 1-100 for PERCENT; FCFA amount for FIXED
+  id               String    @id @default(cuid())
+  code             String    @unique // stored uppercase, validated case-insensitively at lookup
+  discountType     String // PERCENT | FIXED
+  discountValue    Int // 1-100 for PERCENT; FCFA amount for FIXED
   // null = applies to any paid plan. Only 'PRO' is meaningful today (the
   // only paid plan), kept as a string (not a bool) so a future second paid
   // tier doesn't need a schema change.
-  appliesToPlan String?
+  appliesToPlan    String?
   // null = unlimited redemptions.
   maxRedemptions   Int?
   redeemedCount    Int       @default(0)

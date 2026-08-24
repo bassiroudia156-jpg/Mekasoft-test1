@@ -148,6 +148,21 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     }
     const { name, phone, avatarUrl } = parsed.data;
 
+    // 2026-08-24 — phone is now a login identifier alongside email (dual
+    // login, see auth/login/route.ts), so it must be unique. The DB
+    // constraint (schema.prisma) is the actual guarantee; this check just
+    // turns a P2002 into a stable, friendly error code before it happens —
+    // skipped entirely when phone isn't being changed or is being cleared.
+    if (phone) {
+      const existing = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+      if (existing && existing.id !== auth.user.sub) {
+        return NextResponse.json(
+          { error: 'PHONE_ALREADY_IN_USE', message: 'This phone number is already in use.' },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+    }
+
     await prisma.user.update({
       where: { id: auth.user.sub },
       data: {

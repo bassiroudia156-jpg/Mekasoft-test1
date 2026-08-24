@@ -56,6 +56,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       recentRows,
       revenueThisMonthAgg,
       twoWeeksPayments,
+      overdueInvoicesAgg,
     ] = await Promise.all([
       prisma.intervention.count({
         where: { organizationId: auth.organizationId, status: 'En cours' },
@@ -101,6 +102,21 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           paymentDate: { gte: lastMonday },
         },
         select: { amount: true, paymentDate: true },
+      }),
+      // PRD "alertes impayés" (§4.2, US-07) — an invoice past its own
+      // dueDate (paymentTerms defaults to "Net 30 jours", not a flat 7-day
+      // rule the PRD sketched before that field existed) and not yet
+      // Payée. Distinct from the `unpaid` intervention count above, which
+      // only reflects interventions manually marked "Non payé" — this is a
+      // real date comparison against every open invoice.
+      prisma.invoice.aggregate({
+        where: {
+          organizationId: auth.organizationId,
+          status: { not: 'Payée' },
+          dueDate: { lt: now },
+        },
+        _count: true,
+        _sum: { amount: true },
       }),
     ]);
 
@@ -149,6 +165,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         totalInterventions,
         recentInterventions,
         revenueChart: { total: weekTotal, trendPct, bars },
+        overdueInvoices: overdueInvoicesAgg._count,
+        overdueAmount: overdueInvoicesAgg._sum.amount ?? 0,
       },
       { headers: { 'x-request-id': ctx.requestId } },
     );

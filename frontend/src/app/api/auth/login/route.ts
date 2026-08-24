@@ -5,13 +5,24 @@
 //
 // Order is load-bearing per D-24 (enumeration resistance):
 //   1. Zod validate body
-//   2. Per-email rate limit (10/15m — D-08)
+//   2. Per-identifier rate limit (10/15m — D-08)
 //   3. Lockout flag check (Redis) — early-out before bcrypt cost
 //   4. User lookup
 //   5. No-user branch: dummy bcrypt compare → INVALID_CREDENTIALS (no recordFailure)
 //   6. verifyPassword → on fail recordFailure → LOCKED_OUT or INVALID_CREDENTIALS
 //   7. emailVerifiedAt check (after credential match — D-24)
 //   8. recordSuccess + issue 3 cookies
+//
+// 2026-08-24 — dual login (PRD "téléphone comme identifiant"). Signup still
+// requires email (unchanged — keeps the enumeration-resistant
+// email-verification-code flow this whole file's ordering exists to
+// protect); this only lets an ALREADY-verified user log back in with
+// whichever identifier they have on hand, if they've saved a phone number
+// on their profile (`/api/auth/me` PATCH, now unique — see schema.prisma).
+// Every downstream primitive (rate limiter, lockout, dummy-bcrypt timing)
+// is generic over the identifier STRING already — none of them are
+// email-specific despite the "email" naming, so this is a lookup swap, not
+// a new code path duplicated per identifier.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -29,14 +40,19 @@ import { dummyBcryptCompare } from '@/lib/server/auth/dummy-bcrypt';
 import { createEmailLimiter } from '@/lib/server/middleware/rate-limit-by-email';
 import { getRedis } from '@/lib/server/redis';
 import { prisma } from '@/lib/server/prisma';
-import { zEmail } from '@/lib/server/zod-helpers';
+import { zEmail, zPhone } from '@/lib/server/zod-helpers';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { log } from '@/lib/server/observability/log';
 
-const LoginSchema = z.object({
-  email: zEmail,
-  password: z.string().min(1),
-});
+const LoginSchema = z
+  .object({
+    email: zEmail.optional(),
+    phone: zPhone.optional(),
+    password: z.string().min(1),
+  })
+  .refine((v) => !!v.email !== !!v.phone, {
+    message: 'Provide exactly one of email or phone',
+  });
 
 // Module-level limiter — D-08: 10 attempts / 15 min per email.
 const redis = getRedis() ?? undefined;
@@ -71,27 +87,33 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    const { email, password } = parsed.data;
+    const { email, phone, password } = parsed.data;
+    // Exactly one of email/phone is present (schema `.refine` above) — this
+    // is the single identifier every downstream generic-by-string helper
+    // (rate limiter, lockout) is keyed on, and the field Prisma looks up by.
+    const identifier = email ?? phone!;
 
-    // 2. Rate limit per email
-    const rl = await limiter.check(req, email);
+    // 2. Rate limit per identifier
+    const rl = await limiter.check(req, identifier);
     if (rl) {
       rl.headers.set('x-request-id', ctx.requestId);
       return rl;
     }
 
     // 3. Lockout flag check — early out before bcrypt
-    if (await isLockedOut(email)) {
-      log.warn('login blocked by lockout', { email });
+    if (await isLockedOut(identifier)) {
+      log.warn('login blocked by lockout', { identifier });
       return NextResponse.json(
         { error: 'LOCKED_OUT', message: 'Account temporarily locked.' },
         { status: 423, headers: { 'x-request-id': ctx.requestId } },
       );
     }
 
-    // 4. User lookup
+    // 4. User lookup — by whichever identifier was provided. `phone` is
+    // unique (schema.prisma), so this is a real, unambiguous lookup either
+    // way.
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: email ? { email } : { phone: phone! },
       select: {
         id: true,
         email: true,
@@ -117,7 +139,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 6. verifyPassword → on fail, recordFailure
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) {
-      const r = await recordFailure(email);
+      const r = await recordFailure(identifier);
       if (r.locked) {
         return NextResponse.json(
           { error: 'LOCKED_OUT', message: 'Account temporarily locked.' },
@@ -152,7 +174,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     //     lockout. Clearing here keeps the counter clean across the
     //     suspend → restore lifecycle.
     if (user.status === 'SUSPENDED') {
-      await recordSuccess(email);
+      await recordSuccess(identifier);
       return NextResponse.json(
         {
           error: 'ACCOUNT_SUSPENDED',
@@ -166,7 +188,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     //    lastLoginAt (2026-08-20) — the admin dashboard's "Utilisateurs
     //    actifs" KPI needs a real signal; see schema.prisma's field comment
     //    for why OAuth login doesn't stamp this too (protected file).
-    await recordSuccess(email);
+    await recordSuccess(identifier);
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
     const accessToken = await createAccessToken({

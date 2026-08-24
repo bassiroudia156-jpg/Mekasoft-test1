@@ -37,7 +37,13 @@ function LoginPageBody() {
     params.get('reset') === 'ok' ? 'reset' : params.get('logged_out') === '1' ? 'logged_out' : null;
   const bannerMessage = bannerKey ? BANNER_MESSAGES[bannerKey] : null;
 
-  const [email, setEmail] = useState('');
+  // 2026-08-24 — dual login (email or phone). One field, detected client-side
+  // ("@" present → email, else treated as a phone number) rather than a
+  // toggle — matches how the user already thinks about the two ("what do I
+  // sign in with"), not an extra decision to make before typing. The API
+  // does its own strict validation either way (zEmail/zPhone) — this is
+  // just routing, not trust.
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
@@ -47,9 +53,11 @@ function LoginPageBody() {
     setLoggingIn(true);
     setLoginError(null);
     try {
+      const trimmed = identifier.trim();
+      const body = trimmed.includes('@') ? { email: trimmed } : { phone: trimmed };
       const res = await api<{ csrfToken?: string }>('/api/auth/login', {
         method: 'POST',
-        body: { email, password },
+        body: { ...body, password },
       });
       if (res.csrfToken) storeCsrfToken(res.csrfToken);
       await refresh();
@@ -80,14 +88,14 @@ function LoginPageBody() {
 
           <form onSubmit={onLoginSubmit} className="flex flex-col gap-4">
             <Field
-              label="Adresse email"
-              name="email"
-              type="email"
+              label="Email ou téléphone"
+              name="identifier"
+              type="text"
               required
-              autoComplete="email"
-              value={email}
-              onChange={setEmail}
-              placeholder="votre@email.com"
+              autoComplete="username"
+              value={identifier}
+              onChange={setIdentifier}
+              placeholder="votre@email.com ou +221771234567"
             />
             <Field
               label="Mot de passe"

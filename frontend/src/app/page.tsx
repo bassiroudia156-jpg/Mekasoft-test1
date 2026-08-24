@@ -779,9 +779,12 @@ export default async function LandingPage() {
                 Entreprise
               </p>
               <div className="space-y-2">
-                {/* No "about" page exists anywhere in the Banani flow or the
-                    app — plain text rather than a dead link. */}
-                <span className="block text-sm text-background/60">À propos</span>
+                <Link
+                  href="/about"
+                  className="block text-sm text-background/60 hover:text-background transition-colors duration-150"
+                >
+                  À propos
+                </Link>
                 <a
                   href="mailto:support@mekasoft.com"
                   className="block text-sm text-background/60 hover:text-background"

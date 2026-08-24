@@ -9,6 +9,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
@@ -61,6 +62,10 @@ interface DashboardStats {
     trendPct: number | null;
     bars: { day: string; value: number; amount: number }[];
   };
+  /** Invoices past their dueDate and still not Payée — PRD "alertes
+   * impayés" (§4.2, US-07). */
+  overdueInvoices: number;
+  overdueAmount: number;
 }
 
 type StatusFilter = 'all' | InterventionStatus;
@@ -395,6 +400,23 @@ export default function DashboardPage() {
             >
               <Icon i="x" size={14} />
             </button>
+          </div>
+        )}
+
+        {!!organizationId && !loadingStats && !!stats?.overdueInvoices && (
+          <div className="mx-6 mt-5 bg-warning/10 border border-warning/30 rounded-md px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Icon i="triangle-alert" size={16} className="text-warning flex-shrink-0" />
+              <span className="text-sm text-foreground">
+                <span className="font-semibold">
+                  {stats.overdueInvoices} facture{stats.overdueInvoices > 1 ? 's' : ''} en retard
+                </span>{' '}
+                — {formatCompactAmount(stats.overdueAmount)} FCFA en attente de paiement.
+              </span>
+            </div>
+            <Link href="/invoices" className="text-sm font-semibold text-primary shrink-0">
+              Voir les factures →
+            </Link>
           </div>
         )}
 

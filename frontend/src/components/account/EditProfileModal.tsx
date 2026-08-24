@@ -119,9 +119,11 @@ export default function EditProfileModal({ open, onClose }: EditProfileModalProp
       setError(
         err instanceof ApiError && err.code === 'INVALID_BODY'
           ? 'Vérifiez le format des champs (téléphone au format +221771234567).'
-          : err instanceof ApiError
-            ? err.message
-            : 'Erreur réseau.',
+          : err instanceof ApiError && err.code === 'PHONE_ALREADY_IN_USE'
+            ? 'Ce numéro de téléphone est déjà utilisé par un autre compte.'
+            : err instanceof ApiError
+              ? err.message
+              : 'Erreur réseau.',
       );
     } finally {
       setSubmitting(false);

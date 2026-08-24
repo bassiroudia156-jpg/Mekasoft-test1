@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import AuthBrandPanel from '@/components/auth/AuthBrandPanel';
 import GoogleIcon from '@/components/auth/GoogleIcon';
+import Turnstile from '@/components/auth/Turnstile';
 import Field from '@/components/ui/Field';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
@@ -24,13 +25,20 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Security audit fix (2026-08-24, control #12) — undefined when Turnstile
+  // isn't configured (Turnstile renders nothing in that case), which the
+  // server treats as inert too. See lib/server/security/turnstile.ts.
+  const [turnstileToken, setTurnstileToken] = useState<string | undefined>(undefined);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      await api('/api/auth/signup', { method: 'POST', body: { email, password } });
+      await api('/api/auth/signup', {
+        method: 'POST',
+        body: { email, password, ...(turnstileToken ? { turnstileToken } : {}) },
+      });
       router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erreur inconnue.');
@@ -76,6 +84,7 @@ export default function SignupPage() {
               placeholder="••••••••••"
               helper="8 caractères minimum."
             />
+            <Turnstile onVerify={setTurnstileToken} />
             {error && (
               <p role="alert" className="text-xs text-warning">
                 {error}
