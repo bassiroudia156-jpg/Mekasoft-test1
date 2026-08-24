@@ -3,11 +3,18 @@
 // supplies name+email in the body. Rate-limited per email (falls back to
 // IP when neither session nor body supplies one — Zod requires email
 // either way, so that fallback path is defensive only).
+//
+// 2026-08-24 audit fix — CSRF: an anonymous caller has no session (nothing
+// for CSRF to forge), but an authenticated caller's session IS exposed if
+// unchecked — a malicious page could silently submit a ticket attributed
+// to a logged-in victim. Only enforce verifyCsrf when a session actually
+// exists (same reasoning /api/feedback now applies too).
 export const runtime = 'nodejs';
 
 import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
+import { verifyCsrf } from '@/lib/server/auth';
 import { optionalAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { zEmail } from '@/lib/server/zod-helpers';
@@ -52,6 +59,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const auth = await optionalAuth(req.headers.get('authorization'));
+    if (auth) {
+      const csrfFail = verifyCsrf(req);
+      if (csrfFail) return csrfFail;
+    }
 
     const ticket = await prisma.supportTicket.create({
       data: {

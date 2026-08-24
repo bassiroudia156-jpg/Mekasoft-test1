@@ -6,6 +6,13 @@
 // Never mutates redeemedCount — that only happens inside the checkout
 // routes' own transaction, right before the charge is created, to avoid
 // burning a redemption slot on a preview nobody completes.
+//
+// 2026-08-24 audit fix — no verifyCsrf call, deliberately: this handler
+// never writes anything (previewCoupon is read-only), so there's no state
+// for a forged cross-site POST to corrupt, and it must stay reachable from
+// the anonymous checkout page, which has no CSRF cookie to send. If this
+// route ever grows a write (e.g. logging preview attempts), it needs the
+// same authenticated-only verifyCsrf treatment as /api/feedback.
 export const runtime = 'nodejs';
 
 import 'server-only';
