@@ -27,6 +27,18 @@ export interface InvoicePdfData {
   clientPhone: string;
   clientEmail: string | null;
   description: string;
+  /**
+   * 2026-08-24, explicit user request — itemize the parts actually used
+   * instead of one line with the intervention's free-text work summary.
+   * Both optional so this stays backward compatible with the one call
+   * site that can't be touched: the PROTECTED outbox/dispatcher.ts's
+   * emailed-attachment build (atomic-claim/backoff invariants live there,
+   * unrelated to this data shape — see CLAUDE.md's protected-files list).
+   * When either is omitted, renders the original single-description-row
+   * table exactly as before.
+   */
+  laborAmount?: number;
+  parts?: { name: string; quantity: number; unit: string; unitPrice: number; total: number }[];
   subtotal: number;
   taxRatePct: number;
   taxAmount: number;
@@ -141,17 +153,48 @@ export function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
 
         <View>
           <View style={styles.tableHeaderRow}>
-            <Text style={[styles.colDesc, styles.bold]}>Description</Text>
+            <Text style={[styles.colDesc, styles.bold]}>Désignation</Text>
             <Text style={[styles.colQty, styles.bold]}>Quantité</Text>
             <Text style={[styles.colUnit, styles.bold]}>P.U. HT</Text>
             <Text style={[styles.colAmount, styles.bold]}>Montant</Text>
           </View>
-          <View style={styles.tableRow}>
-            <Text style={styles.colDesc}>{data.description}</Text>
-            <Text style={styles.colQty}>1</Text>
-            <Text style={styles.colUnit}>{data.subtotal.toLocaleString('fr-FR')}</Text>
-            <Text style={styles.colAmount}>{data.subtotal.toLocaleString('fr-FR')}</Text>
-          </View>
+          {data.parts ? (
+            <>
+              {!!data.laborAmount && (
+                <View style={styles.tableRow}>
+                  <Text style={styles.colDesc}>Main-d&apos;œuvre</Text>
+                  <Text style={styles.colQty}>—</Text>
+                  <Text style={styles.colUnit}>—</Text>
+                  <Text style={styles.colAmount}>{data.laborAmount.toLocaleString('fr-FR')}</Text>
+                </View>
+              )}
+              {data.parts.map((p, idx) => (
+                <View key={idx} style={styles.tableRow}>
+                  <Text style={styles.colDesc}>{p.name}</Text>
+                  <Text style={styles.colQty}>
+                    {p.quantity} {p.unit}
+                  </Text>
+                  <Text style={styles.colUnit}>{p.unitPrice.toLocaleString('fr-FR')}</Text>
+                  <Text style={styles.colAmount}>{p.total.toLocaleString('fr-FR')}</Text>
+                </View>
+              ))}
+              {!data.laborAmount && data.parts.length === 0 && (
+                <View style={styles.tableRow}>
+                  <Text style={styles.colDesc}>{data.description}</Text>
+                  <Text style={styles.colQty}>1</Text>
+                  <Text style={styles.colUnit}>{data.subtotal.toLocaleString('fr-FR')}</Text>
+                  <Text style={styles.colAmount}>{data.subtotal.toLocaleString('fr-FR')}</Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.tableRow}>
+              <Text style={styles.colDesc}>{data.description}</Text>
+              <Text style={styles.colQty}>1</Text>
+              <Text style={styles.colUnit}>{data.subtotal.toLocaleString('fr-FR')}</Text>
+              <Text style={styles.colAmount}>{data.subtotal.toLocaleString('fr-FR')}</Text>
+            </View>
+          )}
 
           <View style={styles.totalsBlock}>
             <View style={styles.totalsRow}>

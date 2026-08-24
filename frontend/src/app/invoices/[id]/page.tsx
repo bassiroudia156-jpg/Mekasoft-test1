@@ -28,6 +28,8 @@ interface InvoiceDetail {
   reference: string;
   status: InvoiceStatus;
   description: string;
+  laborAmount: number;
+  parts: { name: string; quantity: number; unit: string; unitPrice: number; total: number }[];
   subtotal: number;
   taxRatePct: number;
   taxAmount: number;
@@ -216,6 +218,8 @@ export default function InvoiceDetailPage() {
                           organization: invoice.organization,
                           client: invoice.client,
                           description: invoice.description,
+                          laborAmount: invoice.laborAmount,
+                          parts: invoice.parts,
                           subtotal: invoice.subtotal,
                           taxRatePct: invoice.taxRatePct,
                           taxAmount: invoice.taxAmount,

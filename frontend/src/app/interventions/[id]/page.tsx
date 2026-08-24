@@ -413,6 +413,7 @@ export default function InterventionDetailPage() {
                                 unitPrice={formatFCFA(p.unitPrice)}
                                 total={formatFCFA(p.total)}
                                 inStock={p.inStock}
+                                readOnly={!!intervention.invoiceId}
                                 onDelete={() => void deletePart(p)}
                               />
                             ))}
@@ -420,7 +421,11 @@ export default function InterventionDetailPage() {
                         </div>
                       )}
 
-                      {addPartOpen ? (
+                      {intervention.invoiceId ? (
+                        <p className="text-xs text-muted-foreground">
+                          Intervention déjà facturée — les pièces ne sont plus modifiables.
+                        </p>
+                      ) : addPartOpen ? (
                         <AddPartForm
                           title="Ajouter une autre pièce"
                           onAdd={(part) => {

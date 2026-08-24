@@ -1,6 +1,9 @@
 // DELETE /api/interventions/[id]/parts/[partId] — PartsRow's delete
 // action. Recomputes partsAmount/amount in the same transaction as the
 // Part removal.
+//
+// Refused once already invoiced — see parts/route.ts POST's identical
+// guard comment for why.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -28,12 +31,28 @@ export async function DELETE(
 
     const intervention = await prisma.intervention.findFirst({
       where: { id, organizationId: auth.organizationId },
-      select: { id: true, laborAmount: true, partsAmount: true, taxRatePct: true },
+      select: {
+        id: true,
+        laborAmount: true,
+        partsAmount: true,
+        taxRatePct: true,
+        invoice: { select: { id: true } },
+      },
     });
     if (!intervention) {
       return NextResponse.json(
         { error: 'INTERVENTION_NOT_FOUND' },
         { status: 404, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    if (intervention.invoice) {
+      return NextResponse.json(
+        {
+          error: 'INTERVENTION_ALREADY_INVOICED',
+          message:
+            'Cette intervention est déjà facturée — les pièces ne peuvent plus être modifiées.',
+        },
+        { status: 409, headers: { 'x-request-id': ctx.requestId } },
       );
     }
 

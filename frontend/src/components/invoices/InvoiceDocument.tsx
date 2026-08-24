@@ -3,6 +3,19 @@
 // InvoicePrintFromList, InvoiceDetailsFromEmail), extracted once (decision
 // #9, phase-6-invoices.md). Used by both /invoices/[id] (embedded preview)
 // and /invoices/[id]/print (full print page + @media print).
+//
+// 2026-08-24, explicit user request — the line-items table used to render
+// a single row (`description`, the intervention's free-text work summary)
+// with the whole subtotal as its amount, never naming which spare parts
+// were actually used. `parts`/`laborAmount` are read live off the
+// invoice's underlying `intervention.parts` relation (see /api/invoices/
+// [id] route.ts) — safe to treat as a stable snapshot in practice because
+// parts POST/DELETE now refuse once an intervention is invoiced (see
+// those routes' INTERVENTION_ALREADY_INVOICED guard). Optional so this
+// stays backward compatible: when omitted, falls back to the original
+// single-description-row rendering (the emailed PDF attachment, built
+// inside the PROTECTED outbox/dispatcher.ts, still calls the pdf.tsx
+// equivalent without these fields).
 export interface InvoiceDocumentData {
   reference: string;
   issueDate: string;
@@ -11,6 +24,8 @@ export interface InvoiceDocumentData {
   organization: { name: string; phone: string | null; city: string | null };
   client: { name: string; phone: string; email: string | null };
   description: string;
+  laborAmount?: number;
+  parts?: { name: string; quantity: number; unit: string; unitPrice: number; total: number }[];
   subtotal: number;
   taxRatePct: number;
   taxAmount: number;
@@ -73,22 +88,71 @@ export default function InvoiceDocument({ data }: { data: InvoiceDocumentData })
       </div>
 
       <div className="px-10 py-6 border-b border-border">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th className="text-left py-2 font-medium">Description</th>
-              <th className="text-right py-2 font-medium">Montant (FCFA)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="py-2.5 text-foreground font-medium">{data.description}</td>
-              <td className="py-2.5 text-right font-bold text-foreground">
-                {data.subtotal.toLocaleString('fr-FR')}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        {data.parts ? (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th className="text-left py-2 font-medium">Désignation</th>
+                <th className="text-center py-2 font-medium">Qté</th>
+                <th className="text-right py-2 font-medium">P.U. (FCFA)</th>
+                <th className="text-right py-2 font-medium">Total (FCFA)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!!data.laborAmount && (
+                <tr className="border-b border-border/50">
+                  <td className="py-2.5 text-foreground font-medium">Main-d&apos;œuvre</td>
+                  <td className="py-2.5 text-center text-muted-foreground">—</td>
+                  <td className="py-2.5 text-right text-muted-foreground">—</td>
+                  <td className="py-2.5 text-right font-bold text-foreground">
+                    {data.laborAmount.toLocaleString('fr-FR')}
+                  </td>
+                </tr>
+              )}
+              {data.parts.map((p, idx) => (
+                <tr key={idx} className="border-b border-border/50 last:border-b-0">
+                  <td className="py-2.5 text-foreground font-medium">{p.name}</td>
+                  <td className="py-2.5 text-center text-muted-foreground">
+                    {p.quantity} {p.unit}
+                  </td>
+                  <td className="py-2.5 text-right text-muted-foreground">
+                    {p.unitPrice.toLocaleString('fr-FR')}
+                  </td>
+                  <td className="py-2.5 text-right font-bold text-foreground">
+                    {p.total.toLocaleString('fr-FR')}
+                  </td>
+                </tr>
+              ))}
+              {!data.laborAmount && data.parts.length === 0 && (
+                <tr>
+                  <td className="py-2.5 text-foreground font-medium">{data.description}</td>
+                  <td className="py-2.5 text-center text-muted-foreground">—</td>
+                  <td className="py-2.5 text-right text-muted-foreground">—</td>
+                  <td className="py-2.5 text-right font-bold text-foreground">
+                    {data.subtotal.toLocaleString('fr-FR')}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th className="text-left py-2 font-medium">Description</th>
+                <th className="text-right py-2 font-medium">Montant (FCFA)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="py-2.5 text-foreground font-medium">{data.description}</td>
+                <td className="py-2.5 text-right font-bold text-foreground">
+                  {data.subtotal.toLocaleString('fr-FR')}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="px-10 py-6 border-b border-border">

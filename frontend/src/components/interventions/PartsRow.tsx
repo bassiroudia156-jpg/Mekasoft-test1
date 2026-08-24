@@ -24,6 +24,10 @@ export interface PartsRowProps {
   total: string;
   inStock: boolean;
   onDelete?: () => void;
+  /** Hides the delete button entirely — e.g. once the parent intervention
+   * is already invoiced (2026-08-24), where the API rejects the DELETE
+   * anyway; a visible-but-inert trash icon there would be misleading. */
+  readOnly?: boolean;
 }
 
 export default function PartsRow({
@@ -36,6 +40,7 @@ export default function PartsRow({
   total,
   inStock,
   onDelete,
+  readOnly = false,
 }: PartsRowProps) {
   return (
     <div className="flex items-center gap-4 px-4 py-3 border-b border-border bg-surface">
@@ -61,14 +66,16 @@ export default function PartsRow({
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={onDelete}
-        aria-label={`Retirer ${name}`}
-        className="text-muted-foreground hover:text-accent w-6 h-6 flex items-center justify-center shrink-0"
-      >
-        <Icon i="trash-2" size={14} />
-      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Retirer ${name}`}
+          className="text-muted-foreground hover:text-accent w-6 h-6 flex items-center justify-center shrink-0"
+        >
+          <Icon i="trash-2" size={14} />
+        </button>
+      )}
     </div>
   );
 }

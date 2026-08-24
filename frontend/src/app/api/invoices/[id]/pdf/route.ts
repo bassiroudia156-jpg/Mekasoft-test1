@@ -52,6 +52,15 @@ export async function GET(
         organization: {
           select: { name: true, phone: true, city: true, plan: true, logoUrl: true },
         },
+        intervention: {
+          select: {
+            laborAmount: true,
+            parts: {
+              select: { name: true, quantity: true, unit: true, unitPrice: true, total: true },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
       },
     });
     if (!invoice) {
@@ -76,6 +85,8 @@ export async function GET(
       clientPhone: invoice.client.phone,
       clientEmail: invoice.client.email,
       description: invoice.description,
+      laborAmount: invoice.intervention.laborAmount,
+      parts: invoice.intervention.parts,
       subtotal: invoice.subtotal,
       taxRatePct: invoice.taxRatePct,
       taxAmount: invoice.taxAmount,

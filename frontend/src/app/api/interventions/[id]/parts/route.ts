@@ -4,6 +4,12 @@
 // are itemized locally and submitted atomically with the intervention —
 // see /api/interventions POST) — recomputes the denormalized
 // partsAmount/amount totals in the same transaction as the Part insert.
+//
+// Refused once already invoiced (2026-08-24, mirrors /api/interventions/
+// [id] PATCH's identical guard on taxRatePct) — the invoice now renders
+// its own itemized parts list (read live off this same relation, not a
+// separate snapshot table), so a part added after issue would silently
+// appear on an invoice whose subtotal/amount never accounted for it.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -51,12 +57,28 @@ export async function POST(
 
     const intervention = await prisma.intervention.findFirst({
       where: { id, organizationId: auth.organizationId },
-      select: { id: true, laborAmount: true, partsAmount: true, taxRatePct: true },
+      select: {
+        id: true,
+        laborAmount: true,
+        partsAmount: true,
+        taxRatePct: true,
+        invoice: { select: { id: true } },
+      },
     });
     if (!intervention) {
       return NextResponse.json(
         { error: 'INTERVENTION_NOT_FOUND' },
         { status: 404, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    if (intervention.invoice) {
+      return NextResponse.json(
+        {
+          error: 'INTERVENTION_ALREADY_INVOICED',
+          message:
+            'Cette intervention est déjà facturée — les pièces ne peuvent plus être modifiées.',
+        },
+        { status: 409, headers: { 'x-request-id': ctx.requestId } },
       );
     }
 

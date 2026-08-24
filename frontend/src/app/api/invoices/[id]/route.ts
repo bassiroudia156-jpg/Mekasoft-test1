@@ -61,7 +61,17 @@ export async function GET(
             email: true,
           },
         },
-        intervention: { select: { id: true, reference: true } },
+        intervention: {
+          select: {
+            id: true,
+            reference: true,
+            laborAmount: true,
+            parts: {
+              select: { name: true, quantity: true, unit: true, unitPrice: true, total: true },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
         organization: { select: { name: true, phone: true, city: true } },
       },
     });
@@ -79,6 +89,8 @@ export async function GET(
           reference: row.reference,
           status: row.status,
           description: row.description,
+          laborAmount: row.intervention.laborAmount,
+          parts: row.intervention.parts,
           subtotal: row.subtotal,
           taxRatePct: row.taxRatePct,
           taxAmount: row.taxAmount,

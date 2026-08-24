@@ -201,6 +201,19 @@ async function dispatchEvent(deps: OutboxDispatcherDeps, event: OutboxEvent): Pr
             },
           },
           organization: { select: { name: true, phone: true, city: true } },
+          // 2026-08-24, explicit user request + confirmed before editing
+          // this protected file — itemize the parts actually used instead
+          // of the single free-text description line, same as the
+          // on-demand /api/invoices/[id]/pdf route.
+          intervention: {
+            select: {
+              laborAmount: true,
+              parts: {
+                select: { name: true, quantity: true, unit: true, unitPrice: true, total: true },
+                orderBy: { createdAt: 'asc' },
+              },
+            },
+          },
         },
       });
       if (!invoice) {
@@ -228,6 +241,8 @@ async function dispatchEvent(deps: OutboxDispatcherDeps, event: OutboxEvent): Pr
         clientPhone: invoice.client.phone,
         clientEmail: invoice.client.email,
         description: invoice.description,
+        laborAmount: invoice.intervention.laborAmount,
+        parts: invoice.intervention.parts,
         subtotal: invoice.subtotal,
         taxRatePct: invoice.taxRatePct,
         taxAmount: invoice.taxAmount,
