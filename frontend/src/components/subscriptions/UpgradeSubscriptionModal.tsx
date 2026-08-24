@@ -63,17 +63,15 @@ const ERROR_MAP: Record<string, string> = {
   CHECKOUT_FAILED: 'Le paiement a échoué au démarrage. Réessayez.',
   // 2026-08-22 — api()'s ApiError.message is the raw `error` code, not the
   // server's friendly `message` field (see lib/api.ts), so every code the
-  // checkout route can throw needs an entry here or it renders as-is (e.g.
-  // "COUPON_UNSUPPORTED_FOR_PROVIDER" verbatim). COUPON_UNSUPPORTED_FOR_PROVIDER
-  // itself shouldn't normally be reachable anymore — the provider picker
-  // below disables Chariow while a coupon is applied — but keep the
-  // message in case a coupon gets applied/provider picked in an order the
-  // guard doesn't anticipate. The other COUPON_* codes mirror
-  // COUPON_ERROR_LABEL on the pricing page (a re-validation race: the
-  // coupon was fine when the visitor applied it, invalid by the time this
-  // checkout POST re-checks it — expired/exhausted/deactivated in between).
-  COUPON_UNSUPPORTED_FOR_PROVIDER:
-    "Ce code promo n'est pas compatible avec Mobile Money. Retirez-le ou payez par carte.",
+  // checkout route can throw needs an entry here or it renders as-is. The
+  // COUPON_* codes below mirror COUPON_ERROR_LABEL on the pricing page (a
+  // re-validation race: the coupon was fine when the visitor applied it,
+  // invalid by the time this checkout POST re-checks it —
+  // expired/exhausted/deactivated in between). 2026-08-24 — Chariow now
+  // accepts a coupon too (passed through as its own discount_code); if
+  // Chariow itself rejects it (wrong product scope, doesn't exist there…),
+  // that comes back as CHECKOUT_FAILED with Chariow's own message, mapped
+  // above.
   COUPON_NOT_FOUND: 'Le code promo appliqué est introuvable. Réessayez sans code.',
   COUPON_INACTIVE: "Le code promo appliqué n'est plus actif.",
   COUPON_EXPIRED: 'Le code promo appliqué a expiré.',
@@ -93,18 +91,6 @@ export default function UpgradeSubscriptionModal({
   const [provider, setProvider] = useState<string | null>(availableProviders[0] ?? null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // 2026-08-22 bug fix — Chariow can't accept a coupon at all (no API for a
-  // custom amount; see checkout/route.ts's COUPON_UNSUPPORTED_FOR_PROVIDER
-  // guard). A user who applies a coupon then picks Chariow used to only
-  // find out after clicking "Continuer" and hitting a 400. Steer them away
-  // from the dead end instead: if a coupon is (or becomes) applied while
-  // Chariow is selected, fall back to the first other available provider.
-  useEffect(() => {
-    if (appliedCoupon && provider === 'CHARIOW') {
-      setProvider(availableProviders.find((name) => name !== 'CHARIOW') ?? null);
-    }
-  }, [appliedCoupon, provider, availableProviders]);
 
   useEffect(() => {
     if (!open) return;
@@ -191,30 +177,21 @@ export default function UpgradeSubscriptionModal({
               {availableProviders.map((name) => {
                 const info = PROVIDERS[name];
                 if (!info) return null;
-                // 2026-08-22 — Chariow has no discount API (Chariow.md §6);
-                // disable it up front instead of letting the user hit
-                // COUPON_UNSUPPORTED_FOR_PROVIDER after clicking through.
-                const disabledByCoupon = name === 'CHARIOW' && !!appliedCoupon;
                 return (
                   <button
                     key={name}
                     type="button"
-                    disabled={disabledByCoupon}
                     onClick={() => setProvider(name)}
                     className={`flex items-center gap-3 text-left rounded-md border px-4 py-3 transition-colors ${
-                      disabledByCoupon
-                        ? 'opacity-40 cursor-not-allowed border-border'
-                        : provider === name
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border hover:bg-input'
+                      provider === name
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:bg-input'
                     }`}
                   >
                     <Icon i={info.icon} size={16} className="text-primary shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-foreground">{info.label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {disabledByCoupon ? 'Indisponible avec un code promo' : info.blurb}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{info.blurb}</p>
                     </div>
                   </button>
                 );

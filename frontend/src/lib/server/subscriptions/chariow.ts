@@ -104,6 +104,11 @@ export const chariowSubscriptionProvider: SubscriptionProvider = {
       first_name: first,
       last_name: last,
       phone,
+      // 2026-08-24 — Chariow.md §3.1: "SEUL moyen de réduire le prix". Passed
+      // through verbatim; Chariow itself validates it (exists, active,
+      // scoped to this product) and returns 400/422 if not — surfaced below
+      // as a normal CHECKOUT_FAILED with Chariow's own message.
+      ...(input.couponCode ? { discount_code: input.couponCode } : {}),
       redirect_url: input.successUrl,
       custom_metadata: {
         subscriptionPaymentId: input.subscriptionPaymentId,
@@ -123,7 +128,10 @@ export const chariowSubscriptionProvider: SubscriptionProvider = {
     });
 
     const parsed = (await res.json().catch(() => null)) as {
-      data?: { purchase?: { id?: string }; payment?: { checkout_url?: string } };
+      data?: {
+        purchase?: { id?: string; amount?: { value?: number; currency?: string } };
+        payment?: { checkout_url?: string };
+      };
       message?: string;
     } | null;
 
@@ -133,7 +141,25 @@ export const chariowSubscriptionProvider: SubscriptionProvider = {
       throw new Error(parsed?.message ?? `Chariow responded ${res.status}`);
     }
 
-    return { providerRef: saleId, checkoutUrl };
+    // Chariow.md §3.1: `purchase.amount` is the price ACTUALLY debited
+    // (post-discount_code, and independent of whatever `amount` we sent in
+    // above — Chariow always bills its own product's price). The caller
+    // reconciles its stored payment/intent amount to this.
+    const purchaseAmount = parsed?.data?.purchase?.amount;
+    const actualAmount =
+      purchaseAmount?.value !== undefined && purchaseAmount.currency
+        ? { value: purchaseAmount.value, currency: purchaseAmount.currency }
+        : undefined;
+    if (actualAmount && actualAmount.currency !== 'XOF') {
+      // Historical Chariow.md bug note: a shop can be priced in USD/EUR —
+      // never assume XOF. We don't do currency conversion here, just don't
+      // silently pretend it's FCFA.
+      log.warn('chariow checkout: purchase currency is not XOF', {
+        currency: actualAmount.currency,
+      });
+    }
+
+    return { providerRef: saleId, checkoutUrl, ...(actualAmount ? { actualAmount } : {}) };
   },
 };
 

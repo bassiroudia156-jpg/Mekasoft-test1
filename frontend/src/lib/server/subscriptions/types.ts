@@ -36,14 +36,24 @@ export interface SubscriptionCheckoutInput {
    * dashboard (`amount` above was computed but never actually reached the
    * charge), so a redeemed coupon silently had zero effect on what the
    * customer paid. Stripe now applies this as a one-time Coupon scoped to
-   * just the Checkout Session (see stripe.ts); Chariow has no API for a
-   * custom discount at all (Chariow.md §6 "Pas d'override de prix" —
-   * discounts there only work via a `discount_code` pre-created in
-   * Chariow's own dashboard), so the checkout routes reject
-   * CHARIOW + couponCode up front rather than repeat this bug. Ignored by
-   * Moneroo, which already charges `amount` directly.
+   * just the Checkout Session (see stripe.ts). Ignored by Chariow (see
+   * `couponCode` below instead) and by Moneroo, which already charges
+   * `amount` directly.
    */
   discountAmount?: number;
+  /**
+   * 2026-08-24 — Chariow-only. Chariow has no API for a custom discount
+   * amount (Chariow.md §6 "Pas d'override de prix"): the ONLY way to
+   * reduce its price is a `discount_code` pre-created in Chariow's own
+   * dashboard and passed through verbatim at checkout time — it's Chariow
+   * that validates/applies it (product scoping, expiry…), not us. Reuses
+   * the same code the customer typed into our own coupon field; Chariow
+   * will reject it (see SubscriptionCheckoutResult below / CHECKOUT_FAILED)
+   * if that code doesn't happen to also exist, scoped to this product, on
+   * Chariow's side. Ignored by Stripe/Moneroo, which get their discount via
+   * `amount`/`discountAmount` above instead.
+   */
+  couponCode?: string;
   customerEmail: string;
   customerName?: string;
   /** E.164 phone — required by Moneroo/Chariow, unused by Stripe. */
@@ -59,6 +69,17 @@ export interface SubscriptionCheckoutResult {
    * For Stripe this is the Checkout Session id (cs_...). */
   providerRef: string;
   checkoutUrl: string;
+  /**
+   * 2026-08-24 — Chariow-only. `data.purchase.amount` from Chariow's own
+   * `POST /checkout` response (Chariow.md §3.1) — the price it will ACTUALLY
+   * debit, after any `discount_code` it applied. Chariow prices its own
+   * product independently of our `amount` above (and a discount_code's real
+   * value can differ from what our own Coupon record assumes), so the
+   * caller must overwrite its stored amount with this before returning —
+   * otherwise the webhook's `amountMatches` 5% tolerance check rejects the
+   * (correctly paid) sale as a mismatch and never credits the subscription.
+   */
+  actualAmount?: { value: number; currency: string };
 }
 
 /**

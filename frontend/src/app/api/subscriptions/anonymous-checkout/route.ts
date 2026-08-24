@@ -94,22 +94,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       throw err;
     }
 
-    // 2026-08-22 bug fix — same guard as checkout/route.ts: Chariow has no
-    // API for a custom checkout amount or arbitrary discount (Chariow.md §6),
-    // only a `discount_code` pre-created in Chariow's own dashboard, which
-    // our internal Coupon codes don't map to. Reject up front rather than
-    // silently charge full price after showing a discounted total.
-    if (providerName === 'CHARIOW' && couponCode) {
-      return NextResponse.json(
-        {
-          error: 'COUPON_UNSUPPORTED_FOR_PROVIDER',
-          message:
-            'Les codes promo ne sont pas encore pris en charge pour ce moyen de paiement. Payez par carte ou retirez le code promo.',
-        },
-        { status: 400, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
-
     const pricing = await getPlanPricing(plan);
     const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
@@ -178,6 +162,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         amount: intent.amount,
         // 2026-08-22 — see SubscriptionCheckoutInput.discountAmount.
         discountAmount: pricing.priceFcfa - intent.amount,
+        // 2026-08-24 — see SubscriptionCheckoutInput.couponCode. Ignored by
+        // every provider except Chariow.
+        ...(providerName === 'CHARIOW' && couponCode ? { couponCode } : {}),
         currency: 'XOF',
         customerEmail: email,
         customerName: atelierName,
@@ -189,7 +176,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       await prisma.anonymousSubscriptionIntent.update({
         where: { id: intent.id },
-        data: { providerRef: result.providerRef, checkoutUrl: result.checkoutUrl },
+        data: {
+          providerRef: result.providerRef,
+          checkoutUrl: result.checkoutUrl,
+          // 2026-08-24 — see SubscriptionCheckoutResult.actualAmount: Chariow
+          // is the source of truth for what it will really debit (a
+          // discount_code's real value can differ from our own Coupon
+          // record's), so reconcile our row to it or the webhook's
+          // amountMatches tolerance later rejects a correctly-paid sale.
+          ...(result.actualAmount && result.actualAmount.currency === 'XOF'
+            ? { amount: result.actualAmount.value }
+            : {}),
+        },
       });
 
       return NextResponse.json(

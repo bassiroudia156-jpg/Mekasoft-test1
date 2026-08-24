@@ -103,26 +103,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // 2026-08-22 bug fix — Chariow has no API for a custom checkout amount
-    // (Chariow.md §6 "Pas d'override de prix" / "Jamais de montant custom"):
-    // it always bills the price of the product configured in ITS OWN
-    // dashboard, and the only discount mechanism is a `discount_code`
-    // pre-created there too — our internal Coupon codes have no such
-    // mapping. Silently accepting a coupon here would reproduce the exact
-    // "price drops on screen, full price charged at payment" bug this fix
-    // addresses for Stripe. Reject up front instead, before burning a
-    // redemption slot.
-    if (providerName === 'CHARIOW' && couponCode) {
-      return NextResponse.json(
-        {
-          error: 'COUPON_UNSUPPORTED_FOR_PROVIDER',
-          message:
-            'Les codes promo ne sont pas encore pris en charge pour ce moyen de paiement. Payez par carte ou retirez le code promo.',
-        },
-        { status: 400, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
-
     const pricing = await getPlanPricing(plan);
     const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
 
@@ -198,6 +178,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // provider (see SubscriptionCheckoutInput.discountAmount). 0 when
         // no coupon was redeemed; harmless no-op for providers that ignore it.
         discountAmount: pricing.priceFcfa - payment.amount,
+        // 2026-08-24 — see SubscriptionCheckoutInput.couponCode. Ignored by
+        // every provider except Chariow.
+        ...(providerName === 'CHARIOW' && couponCode ? { couponCode } : {}),
         currency: 'XOF',
         customerEmail,
         customerName: org.name,
@@ -209,7 +192,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       await prisma.subscriptionPayment.update({
         where: { id: payment.id },
-        data: { providerRef: result.providerRef, checkoutUrl: result.checkoutUrl },
+        data: {
+          providerRef: result.providerRef,
+          checkoutUrl: result.checkoutUrl,
+          // 2026-08-24 — see SubscriptionCheckoutResult.actualAmount: Chariow
+          // is the source of truth for what it will really debit (a
+          // discount_code's real value can differ from our own Coupon
+          // record's), so reconcile our row to it or the webhook's
+          // amountMatches tolerance later rejects a correctly-paid sale.
+          ...(result.actualAmount && result.actualAmount.currency === 'XOF'
+            ? { amount: result.actualAmount.value }
+            : {}),
+        },
       });
 
       return NextResponse.json(

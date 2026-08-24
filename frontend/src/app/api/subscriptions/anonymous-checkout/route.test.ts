@@ -175,21 +175,50 @@ describe('POST /api/subscriptions/anonymous-checkout', () => {
       );
     });
 
-    it('400s COUPON_UNSUPPORTED_FOR_PROVIDER for CHARIOW + a coupon, before creating any intent', async () => {
+    // 2026-08-24 — Chariow has no API for a custom discount amount, only a
+    // `discount_code` pre-created in ITS OWN dashboard (Chariow.md §6), so
+    // the coupon code is forwarded as-is rather than applied via our own
+    // computed amountAfterFcfa. Chariow's real charged amount
+    // (`purchase.amount`, surfaced here as `actualAmount`) can legitimately
+    // differ from what our own Coupon row implies — the route must trust
+    // Chariow's figure when reconciling the stored intent, not its own math.
+    it('forwards the coupon code to Chariow as discount_code and reconciles the stored amount to what Chariow actually debits', async () => {
+      prismaMock.coupon.findUnique.mockResolvedValue(couponRow as never);
+      prismaMock.coupon.updateMany.mockResolvedValue({ count: 1 } as never);
+      prismaMock.anonymousSubscriptionIntent.create.mockResolvedValue({
+        id: 'intent_1',
+        amount: 4_950,
+      } as never);
+
+      const createCheckout = vi.fn().mockResolvedValue({
+        providerRef: 'sale_123',
+        checkoutUrl: 'https://chariow.test/c/sale_123',
+        // Chariow's own discount_code can be worth a different amount than
+        // our Coupon row's 50% — its figure is the one that must win.
+        actualAmount: { value: 198, currency: 'XOF' },
+      });
       mockGetProvider.mockResolvedValue({
         name: 'CHARIOW',
         isConfigured: () => true,
-        createCheckout: vi.fn(),
+        createCheckout,
       });
 
       const res = await POST(
         makePost({ ...validBody, provider: 'CHARIOW', couponCode: 'PROMO50' }),
       );
 
-      expect(res.status).toBe(400);
-      const body = (await res.json()) as { error: string };
-      expect(body.error).toBe('COUPON_UNSUPPORTED_FOR_PROVIDER');
-      expect(prismaMock.anonymousSubscriptionIntent.create).not.toHaveBeenCalled();
+      expect(res.status).toBe(201);
+      expect(createCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ couponCode: 'PROMO50' }),
+      );
+      expect(prismaMock.anonymousSubscriptionIntent.update).toHaveBeenCalledWith({
+        where: { id: 'intent_1' },
+        data: {
+          providerRef: 'sale_123',
+          checkoutUrl: 'https://chariow.test/c/sale_123',
+          amount: 198,
+        },
+      });
     });
   });
 });

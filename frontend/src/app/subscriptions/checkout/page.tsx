@@ -60,17 +60,16 @@ const COUPON_ERROR_LABEL: Record<string, string> = {
 // 2026-08-22 — api()'s ApiError.message is the raw `error` code, not the
 // server's friendly `message` field (see lib/api.ts), so every code
 // POST /api/subscriptions/anonymous-checkout can throw needs an entry
-// here or it renders verbatim (e.g. "COUPON_UNSUPPORTED_FOR_PROVIDER").
-// COUPON_UNSUPPORTED_FOR_PROVIDER shouldn't normally be reachable — the
-// method picker below disables Chariow while a coupon is applied — kept
-// as a safety net. The other COUPON_* codes are a re-validation race:
-// fine when applied above, invalid by the time this submit re-checks it.
+// here or it renders verbatim. The COUPON_* codes below are a
+// re-validation race: fine when applied above, invalid by the time this
+// submit re-checks it. CHECKOUT_FAILED covers Chariow rejecting an
+// applied code at its own end too (wrong product scope, expired…) — its
+// message comes straight from Chariow, already reasonably clear in French
+// or not, so no dedicated mapping for that sub-case.
 const CHECKOUT_ERROR_MAP: Record<string, string> = {
   SUBSCRIPTION_PROVIDER_UNCONFIGURED: "Ce moyen de paiement n'est pas encore disponible.",
   CHECKOUT_FAILED: 'Le paiement a échoué au démarrage. Réessayez.',
   TOO_MANY_CHECKOUT_ATTEMPTS: 'Trop de tentatives. Réessayez plus tard.',
-  COUPON_UNSUPPORTED_FOR_PROVIDER:
-    "Ce code promo n'est pas compatible avec Mobile Money. Retirez-le ou payez par carte.",
   COUPON_NOT_FOUND: 'Le code promo appliqué est introuvable. Réessayez sans code.',
   COUPON_INACTIVE: "Le code promo appliqué n'est plus actif.",
   COUPON_EXPIRED: 'Le code promo appliqué a expiré.',
@@ -186,35 +185,18 @@ function CheckoutBody() {
   const monerooAvailable = availableProviders.includes('MONEROO');
   const chariowAvailable = availableProviders.includes('CHARIOW');
 
-  // 2026-08-22 bug fix — Chariow has no discount API (Chariow.md §6 "Pas
-  // d'override de prix"); the checkout route rejects CHARIOW + a coupon
-  // with COUPON_UNSUPPORTED_FOR_PROVIDER. `mobileMoneyAvailable` stays the
-  // raw "is any mobile-money rail configured" signal (drives the generic
-  // "Bientôt disponible" caption); `chariowUsable`/`mobileMoneyUsable`
-  // factor the applied coupon in, so the UI can steer around the dead end
-  // instead of letting the user hit that error after submitting.
+  // 2026-08-24 — Chariow DOES support a discount now, via its own
+  // `discount_code` (Chariow.md §6): the same code applied above is passed
+  // through verbatim at checkout time and Chariow validates/applies it
+  // itself, so Mobile Money no longer needs to be steered around when a
+  // coupon is applied (it used to — see git history if that ever needs
+  // resurrecting). If the code doesn't exist/apply on Chariow's side,
+  // Chariow rejects the checkout and CHECKOUT_FAILED surfaces its message.
   const mobileMoneyAvailable = monerooAvailable || chariowAvailable;
-  const chariowUsable = chariowAvailable && !appliedCoupon;
-  const mobileMoneyUsable = monerooAvailable || chariowUsable;
 
   const resolvedMobileProvider: MobileProvider | null =
-    mobileProvider && (mobileProvider !== 'CHARIOW' || chariowUsable)
-      ? mobileProvider
-      : monerooAvailable
-        ? 'MONEROO'
-        : chariowUsable
-          ? 'CHARIOW'
-          : null;
+    mobileProvider ?? (monerooAvailable ? 'MONEROO' : chariowAvailable ? 'CHARIOW' : null);
   const providerToSubmit = method === 'CARD' ? 'STRIPE' : resolvedMobileProvider;
-
-  // A coupon applied while Mobile Money is selected but only Chariow is
-  // configured leaves nothing payable under that method — fall back to
-  // card rather than leave the "Payer" button permanently disabled.
-  useEffect(() => {
-    if (!mobileMoneyUsable && method === 'MOBILE_MONEY') {
-      setMethod('CARD');
-    }
-  }, [mobileMoneyUsable, method]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -373,23 +355,18 @@ function CheckoutBody() {
                 </button>
                 <button
                   type="button"
-                  disabled={!mobileMoneyUsable}
+                  disabled={!mobileMoneyAvailable}
                   onClick={() => setMethod('MOBILE_MONEY')}
                   className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-md border text-sm font-medium transition-colors ${
                     method === 'MOBILE_MONEY'
                       ? 'border-primary bg-primary/5 text-primary'
                       : 'border-border text-foreground hover:bg-input'
-                  } ${!mobileMoneyUsable ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  } ${!mobileMoneyAvailable ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   <Icon i="smartphone" size={18} />
                   Mobile Money
                   {!mobileMoneyAvailable && (
                     <span className="text-[10px] text-muted-foreground">Bientôt disponible</span>
-                  )}
-                  {mobileMoneyAvailable && !mobileMoneyUsable && (
-                    <span className="text-[10px] text-muted-foreground">
-                      Indisponible avec un code promo
-                    </span>
                   )}
                 </button>
               </div>
@@ -409,14 +386,11 @@ function CheckoutBody() {
                   </button>
                   <button
                     type="button"
-                    disabled={!chariowUsable}
                     onClick={() => setMobileProvider('CHARIOW')}
                     className={`flex-1 px-3 py-2 rounded-md border text-xs font-medium ${
-                      !chariowUsable
-                        ? 'opacity-40 cursor-not-allowed border-border text-muted-foreground'
-                        : resolvedMobileProvider === 'CHARIOW'
-                          ? 'border-primary text-primary'
-                          : 'border-border text-muted-foreground'
+                      resolvedMobileProvider === 'CHARIOW'
+                        ? 'border-primary text-primary'
+                        : 'border-border text-muted-foreground'
                     }`}
                   >
                     Chariow
