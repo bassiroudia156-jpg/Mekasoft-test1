@@ -108,7 +108,19 @@ export default function AddPartForm({
         <Field
           label="Dénomination"
           name="partName"
-          required
+          // Not HTML `required` on purpose (2026-08-24 fix): this mini-form
+          // is nested inside the outer intervention-creation <form> on
+          // /interventions/new — an HTML `required` here gates the OUTER
+          // form's native submit too, not just this form's own "Ajouter à
+          // la liste" button. handleAdd() clears these fields after each
+          // add, so the very next attempt to submit the whole intervention
+          // hit this now-empty-but-required input and blocked, forcing the
+          // user to type a throwaway value just to get past validation
+          // (and if they then hit Enter out of habit, handleKeyDown added
+          // that throwaway value as a bogus extra part). handleAdd()
+          // already does its own `if (!name.trim())` check below — the
+          // native `required` was always redundant with it, just harmful
+          // here.
           value={name}
           onChange={setName}
           placeholder="Filtre à huile…"
