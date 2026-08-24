@@ -2,14 +2,15 @@
 // page, since both "success" screens are the identical document with a
 // toast banner layered on top.
 //
-// "Lancer l'impression" and "Télécharger PDF" both call window.print()
-// (browser-native — offers "Save as PDF" as a destination). Real
-// server-side PDF generation (@react-pdf/renderer) is scoped to Phase 6
-// per IMPLEMENTATION-PLAN.md; faking a "PDF téléchargé avec succès" toast
-// here would assert an outcome we can't actually observe (print vs.
-// save-as-PDF vs. cancel look identical to the page), so instead this
-// listens for the standard `afterprint` event and shows a neutral
-// confirmation once the print dialog closes.
+// "Lancer l'impression" still calls window.print() (browser-native, offers
+// "Save as PDF" as a destination among others). "Télécharger PDF" now opens
+// the real /api/interventions/[id]/devis/pdf route instead of faking it via
+// window.print() the way it used to (same fix invoices/[id]/print/page.tsx
+// got in Phase 6 — see that file's comment) — reported 2026-08-24 as
+// "impossible de télécharger le pdf" because the print dialog isn't an
+// actual one-click download. The `afterprint` toast below still only
+// covers "Lancer l'impression"; the PDF link is a plain navigation with no
+// equivalent completion event to listen for.
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -133,10 +134,12 @@ export default function InterventionDevisPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <Icon i="download" size={14} />
-              Télécharger PDF
-            </Button>
+            <a href={`/api/interventions/${params.id}/devis/pdf`} target="_blank" rel="noreferrer">
+              <Button variant="outline" size="sm">
+                <Icon i="download" size={14} />
+                Télécharger PDF
+              </Button>
+            </a>
             <Button variant="primary" size="sm" onClick={() => window.print()}>
               <Icon i="printer" size={14} />
               Lancer l&apos;impression
