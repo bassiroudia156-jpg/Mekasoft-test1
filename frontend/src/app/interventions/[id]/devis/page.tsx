@@ -86,6 +86,24 @@ export default function InterventionDevisPage() {
     return () => window.removeEventListener('afterprint', handleAfterPrint);
   }, [toast]);
 
+  // The browser's own print header/footer (date + page title, shown top of
+  // the printed sheet) isn't something a page's CSS can remove — it's a
+  // print-dialog setting ("More settings" → "Headers and footers"), off by
+  // default in some browsers, on in others. This page is a Client
+  // Component so it can't export Next's `metadata` (Server Components
+  // only) to override the inherited root title — set `document.title`
+  // imperatively instead, so *if* the browser's header is on, it shows the
+  // devis reference rather than the generic site tagline. Restored on
+  // unmount so navigating elsewhere doesn't leave this route's title behind.
+  useEffect(() => {
+    if (!data) return;
+    const previous = document.title;
+    document.title = `Devis ${data.reference}`;
+    return () => {
+      document.title = previous;
+    };
+  }, [data]);
+
   if (!user) return null;
 
   return (
@@ -134,7 +152,7 @@ export default function InterventionDevisPage() {
           <p className="print-hide text-sm text-warning p-6">{error}</p>
         ) : (
           data && (
-            <div className="flex-1 overflow-y-auto bg-muted/30 flex items-start justify-center py-8 px-4">
+            <div className="print-scroll-reset flex-1 overflow-y-auto bg-muted/30 flex items-start justify-center py-8 px-4">
               <div className="print-document bg-background border border-border rounded-md w-full max-w-[720px] overflow-x-auto">
                 <div className="border-b border-border px-10 py-8 flex items-start justify-between flex-wrap gap-4">
                   <div>
@@ -232,7 +250,7 @@ export default function InterventionDevisPage() {
                       </span>
                     </div>
                     <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Pièces détachées</span>
+                      <span className="text-muted-foreground">Pièces</span>
                       <span className="text-foreground">
                         {data.partsAmount.toLocaleString('fr-FR')} FCFA
                       </span>

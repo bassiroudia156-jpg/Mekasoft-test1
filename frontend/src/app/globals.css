@@ -188,10 +188,25 @@ body {
 /* Print support (Phase 5 — Banani PrintDevis/PrintSent). The devis page
  * wraps its Sidebar/header/toolbar in .print-hide and the actual document
  * in .print-document — @media print hides everything else so "Lancer
- * l'impression" only prints the devis itself, not the whole app chrome. */
+ * l'impression" only prints the devis itself, not the whole app chrome.
+ *
+ * 2026-08-24 fix: printed page came out entirely blank. The document sits
+ * inside a `flex-1 overflow-y-auto` scroll container (so it scrolls on
+ * screen inside the app's `min-h-screen` shell) — print engines only
+ * rasterize what's inside a scrollable container's current viewport, not
+ * its full scrollable content, so anything beyond one screen's height
+ * never made it onto the page. `.print-scroll-reset` (added to that
+ * container in devis/page.tsx) drops the height constraint and lets the
+ * document flow and paginate naturally instead. */
 @media print {
   .print-hide {
     display: none !important;
+  }
+  .print-scroll-reset {
+    overflow: visible !important;
+    flex: none !important;
+    height: auto !important;
+    display: block !important;
   }
   .print-document {
     box-shadow: none !important;
@@ -199,7 +214,10 @@ body {
     width: 100% !important;
     max-width: none !important;
   }
+  html,
   body {
+    height: auto !important;
+    overflow: visible !important;
     background: #fff;
   }
 }
