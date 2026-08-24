@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, useId, useState } from 'react';
+import { type ChangeEvent, type MouseEvent, type ReactNode, useId, useState } from 'react';
 import clsx from 'clsx';
 import DatePicker from './DatePicker';
 import Icon from './Icon';
@@ -33,6 +33,11 @@ export interface FieldProps {
   rows?: number;
   onFocus?: () => void;
   onBlur?: () => void;
+  /** Combobox-style fields (SearchSelect) use this to detect "clicked while
+   * already focused" — a click never re-fires onFocus on an already-focused
+   * input, so a caller driving an open/closed dropdown off focus state has
+   * no other way to notice a second click and toggle it shut. */
+  onMouseDown?: (e: MouseEvent<HTMLInputElement>) => void;
   disabled?: boolean;
   /** Extra control rendered on the same row as the label, right-aligned
    * (e.g. an on/off Switch — see interventions' TVA toggle). */
@@ -64,6 +69,7 @@ export default function Field({
   rows = 3,
   onFocus,
   onBlur,
+  onMouseDown,
   disabled = false,
   labelExtra,
   className,
@@ -200,6 +206,7 @@ export default function Field({
           onChange={handleChange}
           onFocus={onFocus}
           onBlur={onBlur}
+          onMouseDown={onMouseDown}
           placeholder={placeholder}
           required={required}
           autoComplete={autoComplete}

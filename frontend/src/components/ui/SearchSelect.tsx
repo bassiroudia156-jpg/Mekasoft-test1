@@ -1,6 +1,10 @@
-import { useState } from 'react';
+'use client';
+
+import { useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import Field from './Field';
 import Icon from './Icon';
+import { useFloatingPanel } from '@/lib/useFloatingPanel';
 
 export interface SearchSelectOption {
   id: string;
@@ -39,6 +43,15 @@ export interface SearchSelectProps {
 // client/vehicle pickers on /interventions/new read clearly as a menu
 // déroulant. The option panel itself opens with a short fade+slide
 // (`.animate-dropdown-in`, globals.css).
+//
+// 2026-08-24 fix: the panel used to be `absolute`-positioned inside this
+// component's own wrapper, which meant a parent card with `overflow-hidden`
+// (or a table's `overflow-x-auto`) could clip it, and a low z-index
+// (`z-10`) could bury it under later-painted siblings — same bug class
+// RowMenu and DatePicker already had fixed (see their own header
+// comments). Portal it to `document.body`, positioned via
+// `useFloatingPanel` off the trigger's `getBoundingClientRect()`, so it
+// always paints above everything and is never clipped.
 export default function SearchSelect({
   label,
   name,
@@ -52,9 +65,30 @@ export default function SearchSelect({
   onClear,
 }: SearchSelectProps) {
   const [focused, setFocused] = useState(false);
+  const open = focused && options.length > 0 && !selectedLabel;
+  const { triggerRef, panelRef, style } = useFloatingPanel<HTMLDivElement>({
+    open,
+    onClose: () => setFocused(false),
+    matchWidth: true,
+  });
+
+  // 2026-08-24 fix: open/closed is driven by DOM focus, but clicking an
+  // input that's ALREADY focused never re-fires `focus` (browsers only
+  // fire it on an actual focus change) — so a second click did nothing,
+  // leaving the list open until the user clicked away entirely. Catch that
+  // specific case on mousedown (fires before any focus change) — if the
+  // field is already focused, this click is a "close it" gesture, not a
+  // "focus it" one.
+  function handleMouseDown(e: MouseEvent<HTMLInputElement>) {
+    if (focused) {
+      e.preventDefault();
+      e.currentTarget.blur();
+      setFocused(false);
+    }
+  }
 
   return (
-    <div className="relative">
+    <div ref={triggerRef} className="relative">
       <Field
         label={label}
         name={name}
@@ -66,7 +100,8 @@ export default function SearchSelect({
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="pr-8"
+        onMouseDown={handleMouseDown}
+        className="pr-8 cursor-pointer"
         {...(placeholder !== undefined ? { placeholder } : {})}
       />
       <Icon
@@ -76,24 +111,33 @@ export default function SearchSelect({
           focused ? 'rotate-180' : ''
         }`}
       />
-      {focused && options.length > 0 && !selectedLabel && (
-        <div className="absolute z-10 mt-1 w-full bg-surface border border-border rounded-md shadow-lg overflow-hidden max-h-56 overflow-y-auto animate-dropdown-in">
-          {options.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onSelect(opt)}
-              className="w-full flex flex-col text-left px-3 py-2 text-sm text-foreground hover:bg-input"
-            >
-              <span>{opt.label}</span>
-              {opt.sublabel && (
-                <span className="text-xs text-muted-foreground">{opt.sublabel}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="listbox"
+            style={style}
+            className="z-50 bg-surface border border-border rounded-md shadow-xl overflow-hidden max-h-56 overflow-y-auto animate-dropdown-in"
+          >
+            {options.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                role="option"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onSelect(opt)}
+                className="w-full flex flex-col text-left px-3 py-2 text-sm text-foreground hover:bg-input transition-colors duration-150"
+              >
+                <span>{opt.label}</span>
+                {opt.sublabel && (
+                  <span className="text-xs text-muted-foreground">{opt.sublabel}</span>
+                )}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

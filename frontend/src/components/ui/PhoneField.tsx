@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
 import {
   AsYouType,
@@ -10,6 +11,7 @@ import {
   type CountryCode,
 } from 'libphonenumber-js/min';
 import Icon from './Icon';
+import { useFloatingPanel } from '@/lib/useFloatingPanel';
 
 // Audit request (2026-08-18): "un sélecteur de pays [...] et selon le pays
 // que je vais choisir [...] il va me demander le format [...] et même si je
@@ -114,20 +116,19 @@ export default function PhoneField({
   // the sync-from-parent effect below doesn't fight the user's own typing
   // when the parent simply echoes back what we just gave it.
   const lastEmitted = useRef('');
-  // Outside-click-to-close — same self-contained pattern as
-  // InvoiceRowMenu.tsx (no shared <Dropdown> primitive exists yet).
-  const pickerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!pickerOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [pickerOpen]);
+  // 2026-08-24 fix: was `absolute`-positioned inside this field's own
+  // wrapper (self-contained outside-click pattern, same as InvoiceRowMenu
+  // used to be) — a form sitting inside a scrollable modal/card could clip
+  // or bury the panel. Now portaled to `document.body` via the same
+  // primitive RowMenu/DatePicker/SearchSelect already use.
+  const {
+    triggerRef: pickerRef,
+    panelRef,
+    style,
+  } = useFloatingPanel<HTMLDivElement>({
+    open: pickerOpen,
+    onClose: () => setPickerOpen(false),
+  });
 
   // Re-derive the displayed national format when `value` changes from
   // OUTSIDE this component (e.g. a prefilled value on mount).
@@ -230,37 +231,44 @@ export default function PhoneField({
             <span className="text-muted-foreground">+{selected?.callingCode}</span>
             <Icon i="chevron-down" size={12} className="text-muted-foreground" />
           </button>
-          {pickerOpen && (
-            <div className="absolute z-20 mt-1 w-64 bg-surface border border-border rounded-md shadow-lg overflow-hidden">
-              <div className="p-2 border-b border-border">
-                <input
-                  autoFocus
-                  value={countryQuery}
-                  onChange={(e) => setCountryQuery(e.target.value)}
-                  placeholder="Rechercher un pays…"
-                  className="w-full px-2 py-1.5 text-sm border border-border rounded-md bg-input outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
-              <div className="max-h-56 overflow-y-auto">
-                {options.map((o) => (
-                  <button
-                    key={o.code}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleCountrySelect(o.code)}
-                    className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm text-foreground hover:bg-input"
-                  >
-                    <span>{flagEmoji(o.code)}</span>
-                    <span className="flex-1 truncate">{o.name}</span>
-                    <span className="text-xs text-muted-foreground">+{o.callingCode}</span>
-                  </button>
-                ))}
-                {options.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">Aucun résultat.</div>
-                )}
-              </div>
-            </div>
-          )}
+          {pickerOpen &&
+            typeof document !== 'undefined' &&
+            createPortal(
+              <div
+                ref={panelRef}
+                style={{ ...style, width: 256 }}
+                className="z-50 bg-surface border border-border rounded-md shadow-xl overflow-hidden animate-dropdown-in"
+              >
+                <div className="p-2 border-b border-border">
+                  <input
+                    autoFocus
+                    value={countryQuery}
+                    onChange={(e) => setCountryQuery(e.target.value)}
+                    placeholder="Rechercher un pays…"
+                    className="w-full px-2 py-1.5 text-sm border border-border rounded-md bg-input outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="max-h-56 overflow-y-auto">
+                  {options.map((o) => (
+                    <button
+                      key={o.code}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleCountrySelect(o.code)}
+                      className="w-full flex items-center gap-2 text-left px-3 py-2 text-sm text-foreground hover:bg-input transition-colors duration-150"
+                    >
+                      <span>{flagEmoji(o.code)}</span>
+                      <span className="flex-1 truncate">{o.name}</span>
+                      <span className="text-xs text-muted-foreground">+{o.callingCode}</span>
+                    </button>
+                  ))}
+                  {options.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">Aucun résultat.</div>
+                  )}
+                </div>
+              </div>,
+              document.body,
+            )}
         </div>
         <input
           id={id}

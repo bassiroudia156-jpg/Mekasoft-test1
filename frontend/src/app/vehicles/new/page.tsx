@@ -6,6 +6,7 @@
 'use client';
 
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
@@ -16,6 +17,7 @@ import RadioCard from '@/components/ui/RadioCard';
 import Field from '@/components/ui/Field';
 import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
+import { useFloatingPanel } from '@/lib/useFloatingPanel';
 
 interface ClientOption {
   id: string;
@@ -33,6 +35,20 @@ function NewVehicleBody() {
   const [clientQuery, setClientQuery] = useState('');
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([]);
   const [selectedClientName, setSelectedClientName] = useState('');
+  // 2026-08-24 fix: this panel used to be `absolute`-positioned inside its
+  // own wrapper (z-10) — same clipping/burying bug class already fixed on
+  // RowMenu, DatePicker and SearchSelect (see their own header comments).
+  // Portal it to `document.body`, positioned off the trigger's own rect.
+  const clientDropdownOpen = clientOptions.length > 0 && !selectedClientName;
+  const {
+    triggerRef: clientTriggerRef,
+    panelRef: clientPanelRef,
+    style: clientPanelStyle,
+  } = useFloatingPanel<HTMLDivElement>({
+    open: clientDropdownOpen,
+    onClose: () => setClientOptions([]),
+    matchWidth: true,
+  });
 
   const [ownerType, setOwnerType] = useState<'INDIVIDUAL' | 'COMPANY'>('INDIVIDUAL');
   const [brand, setBrand] = useState('');
@@ -159,7 +175,7 @@ function NewVehicleBody() {
               </div>
             ) : (
               <FormSection title="Client">
-                <div className="relative">
+                <div ref={clientTriggerRef} className="relative">
                   <Field
                     label="Sélectionner le client"
                     name="clientSearch"
@@ -171,25 +187,34 @@ function NewVehicleBody() {
                       setClientId('');
                     }}
                     placeholder="Tapez le nom du client…"
+                    className="cursor-pointer"
                   />
-                  {clientOptions.length > 0 && !selectedClientName && (
-                    <div className="absolute z-10 mt-1 w-full bg-surface border border-border rounded-md shadow-lg overflow-hidden">
-                      {clientOptions.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            setClientId(c.id);
-                            setSelectedClientName(c.name);
-                            setClientOptions([]);
-                          }}
-                          className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-input"
-                        >
-                          {c.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {clientDropdownOpen &&
+                    typeof document !== 'undefined' &&
+                    createPortal(
+                      <div
+                        ref={clientPanelRef}
+                        style={clientPanelStyle}
+                        className="z-50 bg-surface border border-border rounded-md shadow-xl overflow-hidden animate-dropdown-in"
+                      >
+                        {clientOptions.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setClientId(c.id);
+                              setSelectedClientName(c.name);
+                              setClientOptions([]);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-input transition-colors duration-150"
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>,
+                      document.body,
+                    )}
                 </div>
               </FormSection>
             )}
