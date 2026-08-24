@@ -14,6 +14,40 @@ import Icon from '@/components/ui/Icon';
 // not a sign the part failed to save (see STATUS.md for the full repro).
 // Removed both dead affordances rather than half-wiring them; quantity is
 // still shown, just no longer editable inline (no consumer needs it to be).
+//
+// 2026-08-24 fix — moved from a flex row to CSS Grid, and exported the
+// header as PartsRowHeader below sharing the SAME column template. This
+// row and its header used to be two independently hand-widthed layouts in
+// two different files (this component + interventions/new/page.tsx's own
+// header markup) — they drifted out of sync twice: once when a leftover
+// header spacer (for the checkbox column removed above) shifted every
+// label ~36px right of its data, and again when the flex row's `flex-1`
+// name/ref column grew wide enough at some widths to visually collide
+// with the "Fournisseur" column instead of sitting cleanly beside it.
+// Grid's `grid-template-columns` has neither failure mode — column widths
+// come from one template, not from two files agreeing on matching
+// `w-*`/`flex-1` classes.
+const GRID_COLS =
+  'grid grid-cols-[minmax(0,1fr)_8rem_6rem_6rem_7rem_5rem_1.5rem] items-center gap-4';
+
+/** Column header row — same GRID_COLS template as PartsRow itself, so the
+ * two can never drift apart again. Render once above a list of PartsRow. */
+export function PartsRowHeader() {
+  return (
+    <div
+      className={`${GRID_COLS} px-4 py-2.5 border-b border-border text-xs font-medium uppercase tracking-widest text-muted-foreground`}
+    >
+      <div>Pièce</div>
+      <div>Fournisseur</div>
+      <div>Quantité</div>
+      <div className="text-right">P.U.</div>
+      <div className="text-right">Total</div>
+      <div className="text-center">Stock</div>
+      <div />
+    </div>
+  );
+}
+
 export interface PartsRowProps {
   reference: string;
   name: string;
@@ -43,23 +77,23 @@ export default function PartsRow({
   readOnly = false,
 }: PartsRowProps) {
   return (
-    <div className="flex items-center gap-4 px-4 py-3 border-b border-border bg-surface">
-      <div className="flex flex-col flex-1 min-w-0">
+    <div className={`${GRID_COLS} px-4 py-3 border-b border-border bg-surface`}>
+      <div className="min-w-0">
         <div className="text-sm font-medium text-foreground truncate">{name}</div>
-        <div className="text-xs text-muted-foreground">REF: {reference}</div>
+        <div className="text-xs text-muted-foreground truncate">REF: {reference}</div>
       </div>
 
-      <div className="text-xs text-muted-foreground w-32 shrink-0 truncate">{supplier}</div>
+      <div className="text-xs text-muted-foreground truncate">{supplier}</div>
 
-      <div className="flex items-center gap-1 w-24 shrink-0">
+      <div className="flex items-center gap-1">
         <span className="text-sm font-medium text-foreground">{quantity}</span>
         <span className="text-xs text-muted-foreground">{unit}</span>
       </div>
 
-      <div className="text-sm text-muted-foreground w-24 text-right shrink-0">{unitPrice}</div>
-      <div className="text-sm font-bold text-foreground w-28 text-right shrink-0">{total}</div>
+      <div className="text-sm text-muted-foreground text-right">{unitPrice}</div>
+      <div className="text-sm font-bold text-foreground text-right">{total}</div>
 
-      <div className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-xs w-20 shrink-0">
+      <div className="flex items-center gap-1.5 justify-center">
         <div className={`w-1.5 h-1.5 rounded-full ${inStock ? 'bg-success' : 'bg-warning'}`} />
         <span className={inStock ? 'text-success' : 'text-warning'}>
           {inStock ? 'Stock' : 'Cmd.'}
@@ -71,7 +105,7 @@ export default function PartsRow({
           type="button"
           onClick={onDelete}
           aria-label={`Retirer ${name}`}
-          className="text-muted-foreground hover:text-accent w-6 h-6 flex items-center justify-center shrink-0"
+          className="text-muted-foreground hover:text-accent w-6 h-6 flex items-center justify-center justify-self-center"
         >
           <Icon i="trash-2" size={14} />
         </button>

@@ -23,7 +23,7 @@ import RadioCard from '@/components/ui/RadioCard';
 import Field from '@/components/ui/Field';
 import Icon from '@/components/ui/Icon';
 import AddPartForm, { type NewPart } from '@/components/interventions/AddPartForm';
-import PartsRow from '@/components/interventions/PartsRow';
+import PartsRow, { PartsRowHeader } from '@/components/interventions/PartsRow';
 import Switch from '@/components/ui/Switch';
 import { type InterventionStatus } from '@/components/interventions/InterventionRow';
 import { SkeletonDocument } from '@/components/ui/Skeleton';
@@ -401,7 +401,8 @@ export default function InterventionDetailPage() {
 
                       {intervention.parts.length > 0 && (
                         <div className="overflow-x-auto mb-3">
-                          <div className="min-w-[600px]">
+                          <div className="min-w-[600px] border border-border rounded-md overflow-hidden">
+                            <PartsRowHeader />
                             {intervention.parts.map((p) => (
                               <PartsRow
                                 key={p.id}
