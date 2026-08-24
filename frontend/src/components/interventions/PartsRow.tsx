@@ -28,22 +28,32 @@ import Icon from '@/components/ui/Icon';
 // come from one template, not from two files agreeing on matching
 // `w-*`/`flex-1` classes.
 //
-// 2026-08-24 follow-up — the fixed tracks below (8rem+6rem+6rem+7rem+5rem+
-// 1.5rem ≈ 536px) don't shrink; on a viewport narrower than that, the
-// `minmax(0,1fr)` name column collapses to 0 and its un-clipped text spills
-// onto "Fournisseur" (interventions/new/page.tsx hit this: the container had
-// no min-width, so on mobile "Pièce" visually merged into "Fournisseur").
-// ANY page rendering PartsRowHeader/PartsRow MUST wrap them in
-// `<div className="overflow-x-auto"><div className="min-w-[600px] ...">`
-// (see interventions/[id]/page.tsx) so the table scrolls horizontally
-// instead of squeezing below its column budget. `truncate` on the header
-// labels below is a second line of defense, not a substitute for the wrapper.
-const GRID_COLS =
-  'grid grid-cols-[minmax(0,1fr)_8rem_6rem_6rem_7rem_5rem_1.5rem] items-center gap-4';
+// 2026-08-24 follow-up — the fixed tracks used to include a `minmax(0,1fr)`
+// name column: with no floor, on a viewport narrower than the fixed tracks'
+// total it computed to (near) 0 and rendered as a single stray glyph
+// colliding with "Fournisseur" (interventions/new/page.tsx hit this twice —
+// once with no min-width wrapper at all, once with a wrapper whose value was
+// still narrower than the row's true minimum content width). Wrapping in
+// `overflow-x-auto` is necessary but NOT sufficient on its own — a `1fr`
+// track with no floor will still collapse toward 0 before that scroll
+// container ever kicks in. Fixed with two changes: the name column now has
+// a real floor (`minmax(9rem,1fr)`, below), and the Stock column was
+// dropped entirely (2026-08-24, on request — it wasn't earning its ~6rem of
+// the budget).
+//
+// The row's true minimum content width (all tracks at their floor, plus 5
+// gaps + px-4 padding) is 9+8+6+6+7+1.5 = 37.5rem of tracks + 5rem of gaps +
+// 2rem of padding = 44.5rem = 712px. ANY page rendering PartsRowHeader/
+// PartsRow MUST wrap them in
+// `<div className="overflow-x-auto"><div className="min-w-[720px] ...">`
+// (see interventions/[id]/page.tsx) — round UP from 712px, never down, or
+// you're back to the same collapse. `truncate` on the header labels below is
+// a second line of defense, not a substitute for the wrapper.
+const GRID_COLS = 'grid grid-cols-[minmax(9rem,1fr)_8rem_6rem_6rem_7rem_1.5rem] items-center gap-4';
 
 /** Column header row — same GRID_COLS template as PartsRow itself, so the
  * two can never drift apart again. Render once above a list of PartsRow,
- * inside a `min-w-[600px]` wrapper under `overflow-x-auto` (see file header
+ * inside a `min-w-[720px]` wrapper under `overflow-x-auto` (see file header
  * comment) — never bare. */
 export function PartsRowHeader() {
   return (
@@ -55,7 +65,6 @@ export function PartsRowHeader() {
       <div className="truncate">Quantité</div>
       <div className="text-right">P.U.</div>
       <div className="text-right">Total</div>
-      <div className="text-center">Stock</div>
       <div />
     </div>
   );
@@ -69,7 +78,6 @@ export interface PartsRowProps {
   unit: string;
   unitPrice: string;
   total: string;
-  inStock: boolean;
   onDelete?: () => void;
   /** Hides the delete button entirely — e.g. once the parent intervention
    * is already invoiced (2026-08-24), where the API rejects the DELETE
@@ -85,7 +93,6 @@ export default function PartsRow({
   unit,
   unitPrice,
   total,
-  inStock,
   onDelete,
   readOnly = false,
 }: PartsRowProps) {
@@ -105,13 +112,6 @@ export default function PartsRow({
 
       <div className="text-sm text-muted-foreground text-right">{unitPrice}</div>
       <div className="text-sm font-bold text-foreground text-right">{total}</div>
-
-      <div className="flex items-center gap-1.5 justify-center">
-        <div className={`w-1.5 h-1.5 rounded-full ${inStock ? 'bg-success' : 'bg-warning'}`} />
-        <span className={inStock ? 'text-success' : 'text-warning'}>
-          {inStock ? 'Stock' : 'Cmd.'}
-        </span>
-      </div>
 
       {!readOnly && (
         <button

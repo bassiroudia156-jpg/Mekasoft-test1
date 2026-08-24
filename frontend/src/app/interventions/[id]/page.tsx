@@ -401,7 +401,7 @@ export default function InterventionDetailPage() {
 
                       {intervention.parts.length > 0 && (
                         <div className="overflow-x-auto mb-3">
-                          <div className="min-w-[600px] border border-border rounded-md overflow-hidden">
+                          <div className="min-w-[720px] border border-border rounded-md overflow-hidden">
                             <PartsRowHeader />
                             {intervention.parts.map((p) => (
                               <PartsRow
@@ -413,7 +413,6 @@ export default function InterventionDetailPage() {
                                 unit={p.unit}
                                 unitPrice={formatFCFA(p.unitPrice)}
                                 total={formatFCFA(p.total)}
-                                inStock={p.inStock}
                                 readOnly={!!intervention.invoiceId}
                                 onDelete={() => void deletePart(p)}
                               />

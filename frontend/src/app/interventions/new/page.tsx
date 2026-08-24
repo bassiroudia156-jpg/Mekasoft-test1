@@ -571,7 +571,7 @@ function NewInterventionBody() {
                     <AddPartForm onAdd={(p) => setParts((prev) => [...prev, p])} />
                     {parts.length > 0 && (
                       <div className="overflow-x-auto">
-                        <div className="min-w-[600px] bg-background border border-border rounded-md overflow-hidden">
+                        <div className="min-w-[720px] bg-background border border-border rounded-md overflow-hidden">
                           <PartsRowHeader />
                           {parts.map((p, idx) => (
                             <PartsRow
@@ -583,7 +583,6 @@ function NewInterventionBody() {
                               unit={p.unit}
                               unitPrice={formatFCFA(p.unitPrice)}
                               total={formatFCFA(p.quantity * p.unitPrice)}
-                              inStock={p.inStock}
                               onDelete={() => setParts((prev) => prev.filter((_, i) => i !== idx))}
                             />
                           ))}
