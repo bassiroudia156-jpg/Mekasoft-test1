@@ -22,7 +22,7 @@ import Button from '@/components/ui/Button';
 import Icon from '@/components/ui/Icon';
 import SearchSelect, { type SearchSelectOption } from '@/components/ui/SearchSelect';
 import AddPartForm, { type NewPart } from '@/components/interventions/AddPartForm';
-import PartsRow from '@/components/interventions/PartsRow';
+import PartsRow, { PartsRowHeader } from '@/components/interventions/PartsRow';
 import Switch from '@/components/ui/Switch';
 
 const CATEGORY_OPTIONS = [
@@ -359,7 +359,7 @@ function NewInterventionBody() {
                     <span className="font-medium text-foreground">{formatFCFA(laborNum)}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Pièces détachées</span>
+                    <span className="text-muted-foreground">Pièces</span>
                     <span className="font-medium text-foreground">
                       {formatFCFA(effectivePartsAmount)}
                     </span>
@@ -401,14 +401,14 @@ function NewInterventionBody() {
           ) : (
             <form onSubmit={onSubmit} className="max-w-3xl mx-auto p-6 flex flex-col gap-6">
               <FormSection title="Client & véhicule">
-                {clientLocked && clientName ? (
-                  <div className="bg-secondary/10 border border-secondary rounded-md p-4 mb-4">
-                    <div className="text-sm font-medium text-secondary-foreground">
-                      Intervention pour <span className="font-bold">{clientName}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  {clientLocked && clientName ? (
+                    <div className="bg-secondary/10 border border-secondary rounded-md p-4 flex items-center">
+                      <div className="text-sm font-medium text-secondary-foreground">
+                        Client : <span className="font-bold">{clientName}</span>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                  ) : (
                     <SearchSelect
                       label="Client"
                       name="clientSearch"
@@ -424,6 +424,15 @@ function NewInterventionBody() {
                         setClientName(null);
                       }}
                     />
+                  )}
+
+                  {vehicleLocked && vehicleName ? (
+                    <div className="bg-secondary/10 border border-secondary rounded-md p-4 flex items-center">
+                      <div className="text-sm font-medium text-secondary-foreground">
+                        Véhicule : <span className="font-bold">{vehicleName}</span>
+                      </div>
+                    </div>
+                  ) : (
                     <SearchSelect
                       label="Véhicule"
                       name="vehicleSearch"
@@ -442,16 +451,8 @@ function NewInterventionBody() {
                         setVehicleDetails(null);
                       }}
                     />
-                  </div>
-                )}
-
-                {vehicleLocked && vehicleName && (
-                  <div className="bg-secondary/10 border border-secondary rounded-md p-4 mb-4">
-                    <div className="text-sm font-medium text-secondary-foreground">
-                      Véhicule : <span className="font-bold">{vehicleName}</span>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {vehicleDetails && (
                   <div className="grid grid-cols-3 gap-4 text-xs pt-2 border-t border-border">
@@ -532,7 +533,7 @@ function NewInterventionBody() {
                     placeholder="Ex: 25000"
                   />
                   <Field
-                    label="Pièces détachées (CFA)"
+                    label="Pièces (CFA)"
                     name="partsAmount"
                     type="number"
                     value={parts.length > 0 ? String(partsTotal) : partsAmountManual}
@@ -569,31 +570,24 @@ function NewInterventionBody() {
                   <div className="flex flex-col gap-3 mb-4">
                     <AddPartForm onAdd={(p) => setParts((prev) => [...prev, p])} />
                     {parts.length > 0 && (
-                      <div className="bg-background border border-border rounded-md overflow-hidden">
-                        <div className="flex items-center gap-4 px-4 py-2.5 border-b border-border text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                          <div className="w-5" />
-                          <div className="flex-1">Pièce</div>
-                          <div className="w-32">Fournisseur</div>
-                          <div className="w-24">Quantité</div>
-                          <div className="w-24 text-right">P.U.</div>
-                          <div className="w-28 text-right">Total</div>
-                          <div className="w-20 text-center">Stock</div>
-                          <div className="w-6" />
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[600px] bg-background border border-border rounded-md overflow-hidden">
+                          <PartsRowHeader />
+                          {parts.map((p, idx) => (
+                            <PartsRow
+                              key={idx}
+                              reference={p.reference ?? '—'}
+                              name={p.name}
+                              supplier={p.supplier ?? '—'}
+                              quantity={p.quantity}
+                              unit={p.unit}
+                              unitPrice={formatFCFA(p.unitPrice)}
+                              total={formatFCFA(p.quantity * p.unitPrice)}
+                              inStock={p.inStock}
+                              onDelete={() => setParts((prev) => prev.filter((_, i) => i !== idx))}
+                            />
+                          ))}
                         </div>
-                        {parts.map((p, idx) => (
-                          <PartsRow
-                            key={idx}
-                            reference={p.reference ?? '—'}
-                            name={p.name}
-                            supplier={p.supplier ?? '—'}
-                            quantity={p.quantity}
-                            unit={p.unit}
-                            unitPrice={formatFCFA(p.unitPrice)}
-                            total={formatFCFA(p.quantity * p.unitPrice)}
-                            inStock={p.inStock}
-                            onDelete={() => setParts((prev) => prev.filter((_, i) => i !== idx))}
-                          />
-                        ))}
                       </div>
                     )}
                   </div>

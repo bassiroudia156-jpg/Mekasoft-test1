@@ -27,19 +27,32 @@ import Icon from '@/components/ui/Icon';
 // Grid's `grid-template-columns` has neither failure mode — column widths
 // come from one template, not from two files agreeing on matching
 // `w-*`/`flex-1` classes.
+//
+// 2026-08-24 follow-up — the fixed tracks below (8rem+6rem+6rem+7rem+5rem+
+// 1.5rem ≈ 536px) don't shrink; on a viewport narrower than that, the
+// `minmax(0,1fr)` name column collapses to 0 and its un-clipped text spills
+// onto "Fournisseur" (interventions/new/page.tsx hit this: the container had
+// no min-width, so on mobile "Pièce" visually merged into "Fournisseur").
+// ANY page rendering PartsRowHeader/PartsRow MUST wrap them in
+// `<div className="overflow-x-auto"><div className="min-w-[600px] ...">`
+// (see interventions/[id]/page.tsx) so the table scrolls horizontally
+// instead of squeezing below its column budget. `truncate` on the header
+// labels below is a second line of defense, not a substitute for the wrapper.
 const GRID_COLS =
   'grid grid-cols-[minmax(0,1fr)_8rem_6rem_6rem_7rem_5rem_1.5rem] items-center gap-4';
 
 /** Column header row — same GRID_COLS template as PartsRow itself, so the
- * two can never drift apart again. Render once above a list of PartsRow. */
+ * two can never drift apart again. Render once above a list of PartsRow,
+ * inside a `min-w-[600px]` wrapper under `overflow-x-auto` (see file header
+ * comment) — never bare. */
 export function PartsRowHeader() {
   return (
     <div
       className={`${GRID_COLS} px-4 py-2.5 border-b border-border text-xs font-medium uppercase tracking-widest text-muted-foreground`}
     >
-      <div>Pièce</div>
-      <div>Fournisseur</div>
-      <div>Quantité</div>
+      <div className="truncate">Pièce</div>
+      <div className="truncate">Fournisseur</div>
+      <div className="truncate">Quantité</div>
       <div className="text-right">P.U.</div>
       <div className="text-right">Total</div>
       <div className="text-center">Stock</div>
