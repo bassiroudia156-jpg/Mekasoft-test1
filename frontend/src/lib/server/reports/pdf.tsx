@@ -3,6 +3,7 @@
 import 'server-only';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
 import type { MonthlyReportData } from './monthly';
+import { formatMoneyForPdf } from '../pdf-format';
 
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 10, color: '#0d1b2a', fontFamily: 'Helvetica' },
@@ -50,9 +51,10 @@ const styles = StyleSheet.create({
   footer: { marginTop: 32, borderTopWidth: 1, borderTopColor: '#d4d0c8', paddingTop: 12 },
 });
 
-function fcfa(n: number): string {
-  return `${n.toLocaleString('fr-FR')} FCFA`;
-}
+// 2026-08-24 bug fix — was `n.toLocaleString('fr-FR')`, which garbles
+// inside react-pdf's base Helvetica font (see pdf-format.ts's file
+// comment).
+const fcfa = formatMoneyForPdf;
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);

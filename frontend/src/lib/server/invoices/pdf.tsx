@@ -6,6 +6,7 @@
 // Tailwind — the two are independent renderers of the same data shape.
 import 'server-only';
 import { Document, Page, Text, View, Image, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import { groupThousands, formatMoneyForPdf } from '../pdf-format';
 
 export interface InvoicePdfData {
   reference: string;
@@ -103,9 +104,10 @@ const styles = StyleSheet.create({
   footer: { marginTop: 32, borderTopWidth: 1, borderTopColor: '#d4d0c8', paddingTop: 12 },
 });
 
-function fcfa(n: number): string {
-  return `${n.toLocaleString('fr-FR')} FCFA`;
-}
+// 2026-08-24 bug fix — was `n.toLocaleString('fr-FR')`, which garbles
+// inside react-pdf's base Helvetica font (see pdf-format.ts's file
+// comment). formatMoneyForPdf/groupThousands never produce that character.
+const fcfa = formatMoneyForPdf;
 
 export function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
   return (
@@ -165,7 +167,7 @@ export function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
                   <Text style={styles.colDesc}>Main-d&apos;œuvre</Text>
                   <Text style={styles.colQty}>—</Text>
                   <Text style={styles.colUnit}>—</Text>
-                  <Text style={styles.colAmount}>{data.laborAmount.toLocaleString('fr-FR')}</Text>
+                  <Text style={styles.colAmount}>{groupThousands(data.laborAmount)}</Text>
                 </View>
               )}
               {data.parts.map((p, idx) => (
@@ -174,16 +176,16 @@ export function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
                   <Text style={styles.colQty}>
                     {p.quantity} {p.unit}
                   </Text>
-                  <Text style={styles.colUnit}>{p.unitPrice.toLocaleString('fr-FR')}</Text>
-                  <Text style={styles.colAmount}>{p.total.toLocaleString('fr-FR')}</Text>
+                  <Text style={styles.colUnit}>{groupThousands(p.unitPrice)}</Text>
+                  <Text style={styles.colAmount}>{groupThousands(p.total)}</Text>
                 </View>
               ))}
               {!data.laborAmount && data.parts.length === 0 && (
                 <View style={styles.tableRow}>
                   <Text style={styles.colDesc}>{data.description}</Text>
                   <Text style={styles.colQty}>1</Text>
-                  <Text style={styles.colUnit}>{data.subtotal.toLocaleString('fr-FR')}</Text>
-                  <Text style={styles.colAmount}>{data.subtotal.toLocaleString('fr-FR')}</Text>
+                  <Text style={styles.colUnit}>{groupThousands(data.subtotal)}</Text>
+                  <Text style={styles.colAmount}>{groupThousands(data.subtotal)}</Text>
                 </View>
               )}
             </>
@@ -191,8 +193,8 @@ export function InvoicePdfDocument({ data }: { data: InvoicePdfData }) {
             <View style={styles.tableRow}>
               <Text style={styles.colDesc}>{data.description}</Text>
               <Text style={styles.colQty}>1</Text>
-              <Text style={styles.colUnit}>{data.subtotal.toLocaleString('fr-FR')}</Text>
-              <Text style={styles.colAmount}>{data.subtotal.toLocaleString('fr-FR')}</Text>
+              <Text style={styles.colUnit}>{groupThousands(data.subtotal)}</Text>
+              <Text style={styles.colAmount}>{groupThousands(data.subtotal)}</Text>
             </View>
           )}
 

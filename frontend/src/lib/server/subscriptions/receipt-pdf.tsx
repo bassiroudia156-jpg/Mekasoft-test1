@@ -5,6 +5,7 @@
 // reference"/"client" here, but a provider + billing period instead).
 import 'server-only';
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer';
+import { formatMoneyForPdf } from '../pdf-format';
 
 export interface SubscriptionReceiptPdfData {
   paymentId: string;
@@ -46,8 +47,11 @@ const styles = StyleSheet.create({
   amountValue: { fontSize: 18, fontWeight: 700 },
 });
 
+// 2026-08-24 bug fix — was `n.toLocaleString('fr-FR')`, which garbles
+// inside react-pdf's base Helvetica font (see pdf-format.ts's file
+// comment).
 function money(n: number, currency: string): string {
-  return `${n.toLocaleString('fr-FR')} ${currency}`;
+  return formatMoneyForPdf(n, currency);
 }
 
 export function SubscriptionReceiptPdfDocument({ data }: { data: SubscriptionReceiptPdfData }) {
