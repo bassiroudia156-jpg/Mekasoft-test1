@@ -11,6 +11,7 @@ export interface VehicleRowProps {
   mileage: string;
   lastService: string;
   status: VehicleStatus;
+  onView: () => void;
   onEdit: () => void;
   onToggleStatus: () => void;
   onDelete: () => void;
@@ -24,6 +25,7 @@ export default function VehicleRow({
   mileage,
   lastService,
   status,
+  onView,
   onEdit,
   onToggleStatus,
   onDelete,
@@ -52,6 +54,7 @@ export default function VehicleRow({
       <div className="flex items-center gap-1 w-14 justify-end">
         <VehicleRowMenu
           status={status}
+          onView={onView}
           onEdit={onEdit}
           onToggleStatus={onToggleStatus}
           onDelete={onDelete}

@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -40,6 +41,7 @@ type StatusFilter = 'all' | 'Actif' | 'Inactif';
 
 export default function VehiclesPage() {
   const user = useUser();
+  const router = useRouter();
   const { toast } = useToast();
 
   const [items, setItems] = useState<VehicleListItem[]>([]);
@@ -333,6 +335,7 @@ export default function VehiclesPage() {
                           : '—'
                       }
                       status={v.status}
+                      onView={() => router.push(`/vehicles/${v.id}`)}
                       onEdit={() => setEditTarget(v.id)}
                       onToggleStatus={() => void handleToggleStatus(v)}
                       onDelete={() =>

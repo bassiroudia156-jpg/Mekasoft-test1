@@ -3,6 +3,7 @@ import type { VehicleStatus } from './VehicleRow';
 
 export interface VehicleRowMenuProps {
   status: VehicleStatus;
+  onView: () => void;
   onEdit: () => void;
   onToggleStatus: () => void;
   onDelete: () => void;
@@ -17,6 +18,7 @@ export interface VehicleRowMenuProps {
 // table).
 export default function VehicleRowMenu({
   status,
+  onView,
   onEdit,
   onToggleStatus,
   onDelete,
@@ -24,6 +26,7 @@ export default function VehicleRowMenu({
   return (
     <RowMenu
       items={[
+        { key: 'view', label: 'Voir la fiche', icon: 'eye', onClick: onView },
         { key: 'edit', label: 'Modifier les informations', icon: 'pencil', onClick: onEdit },
         {
           key: 'toggle',

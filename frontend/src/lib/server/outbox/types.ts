@@ -15,7 +15,8 @@ export type OutboxEvent =
   | EmailVerificationCodeEvent
   | EmailPasswordResetEvent
   | EmailTeamInviteEvent
-  | EmailInvoiceEvent;
+  | EmailInvoiceEvent
+  | EmailQuoteSentEvent;
 
 export interface NotificationPaymentReceivedEvent {
   kind: 'notification.payment_received';
@@ -94,6 +95,25 @@ export interface EmailInvoiceEvent {
     invoiceId: string;
     to: string;
     customMessage?: string;
+  };
+}
+
+/**
+ * Phase C decision #8 (2026-08-25) — emitted by POST /api/quotes/[id]/send.
+ * The dispatcher renders quoteSentEmail() with the public respond link
+ * (`${APP_URL}/quotes/respond/${token}`, same token the client clicks to
+ * accept/reject with no account — see the Quote model comment).
+ */
+export interface EmailQuoteSentEvent {
+  kind: 'email.quote_sent';
+  payload: {
+    to: string;
+    quoteReference: string;
+    organizationName: string;
+    clientName: string;
+    amount: number;
+    validUntil: string;
+    token: string;
   };
 }
 

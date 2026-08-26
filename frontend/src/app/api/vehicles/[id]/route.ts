@@ -3,6 +3,13 @@
 // NewInterventionFromVehicle's `?vehicleId=` entry point (derives the
 // owning client + plate/mileage to pre-lock the intervention form).
 //
+// GET's `interventions` list (Phase C item #7, 2026-08-25) backs the new
+// /vehicles/[id] detail page — the same per-entity intervention history the
+// client profile has always shown (clients/[id]/route.ts), just scoped to
+// `vehicleId` instead of `clientId`. Reuses InterventionHistoryCard on the
+// frontend (extracted from clients/[id]/page.tsx's own inline block for
+// exactly this reuse).
+//
 // PATCH (2026-08-18 audit): the row "..." menu on both /vehicles and a
 // client's profile page was dead UI (VehicleRow rendered a plain button
 // with no menu behind it) — this is the missing capability. All fields
@@ -47,6 +54,16 @@ const PatchVehicleBody = z
     message: 'At least one field is required',
   });
 
+function displayName(c: {
+  type: string;
+  firstName: string | null;
+  lastName: string | null;
+  companyName: string | null;
+}) {
+  if (c.type === 'COMPANY') return c.companyName ?? '';
+  return [c.firstName, c.lastName].filter(Boolean).join(' ');
+}
+
 export async function GET(
   req: NextRequest,
   routeCtx: { params: Promise<{ id: string }> },
@@ -74,6 +91,9 @@ export async function GET(
         color: true,
         notes: true,
         status: true,
+        client: {
+          select: { type: true, firstName: true, lastName: true, companyName: true, phone: true },
+        },
       },
     });
     if (!vehicle) {
@@ -83,7 +103,31 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ vehicle }, { headers: { 'x-request-id': ctx.requestId } });
+    const interventions = await prisma.intervention.findMany({
+      where: { vehicleId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        reference: true,
+        work: true,
+        amount: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    const { client, ...vehicleFields } = vehicle;
+    return NextResponse.json(
+      {
+        vehicle: {
+          ...vehicleFields,
+          client: { id: vehicle.clientId, name: displayName(client), phone: client.phone },
+          interventions,
+        },
+      },
+      { headers: { 'x-request-id': ctx.requestId } },
+    );
   });
 }
 

@@ -22,6 +22,7 @@ export type SidebarActiveKey =
   | 'interventions'
   | 'clients'
   | 'vehicles'
+  | 'quotes'
   | 'invoices'
   | 'payments'
   // Not a NAV_ITEMS entry (the account block below isn't part of that list)
@@ -43,9 +44,17 @@ const NAV_ITEMS: { id: SidebarActiveKey; icon: string; label: string; href: stri
   { id: 'interventions', icon: 'wrench', label: 'Interventions', href: '/interventions' },
   { id: 'clients', icon: 'users', label: 'Clients', href: '/clients' },
   { id: 'vehicles', icon: 'car', label: 'Véhicules', href: '/vehicles' },
+  { id: 'quotes', icon: 'file-check', label: 'Devis', href: '/quotes' },
   { id: 'invoices', icon: 'file-text', label: 'Factures', href: '/invoices' },
   { id: 'payments', icon: 'banknote', label: 'Paiements', href: '/payments' },
 ];
+
+// 2026-08-25 — PRD US-09: a Mécanicien sees/edits interventions but never
+// reaches devis/factures/paiements. The backend already refuses these two
+// (requireBillingAccess, see lib/server/organizations/require-caller-org.ts)
+// — hiding the links here is just "no dead UI": a Mécanicien clicking
+// either would otherwise land on a real page that immediately errors.
+const BILLING_NAV_IDS: SidebarActiveKey[] = ['quotes', 'invoices', 'payments'];
 
 export interface SidebarProps {
   active: SidebarActiveKey;
@@ -72,6 +81,10 @@ export default function Sidebar({ active }: SidebarProps) {
   const { plan, loading: planLoading } = useCallerOrganization(!!user);
   const displayName = user?.name ?? user?.email ?? 'Mon compte';
   const displayRole = user ? orgRoleLabel(user.orgRole, user.jobTitle) : '';
+  const isMechanic = user?.jobTitle === 'Mécanicien';
+  const navItems = isMechanic
+    ? NAV_ITEMS.filter((item) => !BILLING_NAV_IDS.includes(item.id))
+    : NAV_ITEMS;
 
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -121,7 +134,7 @@ export default function Sidebar({ active }: SidebarProps) {
 
         {/* Nav */}
         <nav className="flex flex-col gap-0.5 px-3 py-4 flex-1">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.id}
               href={item.href}

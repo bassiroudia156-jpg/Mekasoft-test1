@@ -178,6 +178,28 @@ async function dispatchEvent(deps: OutboxDispatcherDeps, event: OutboxEvent): Pr
       await deps.emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html });
       return;
     }
+    case 'email.quote_sent': {
+      // Phase C decision #8 (2026-08-25) — emitted by
+      // POST /api/quotes/[id]/send. Renders the public, no-account
+      // accept/reject link (same shape as email.team_invite's acceptUrl).
+      // Confirmed with the user before editing this protected file.
+      if (!deps.emailQueue) throw new Error('email queue not configured');
+      const { quoteSentEmail } = await import('../quotes/email-templates');
+      const { to, quoteReference, organizationName, clientName, amount, validUntil, token } =
+        event.payload;
+      const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
+      const respondUrl = `${appUrl}/quotes/respond/${encodeURIComponent(token)}`;
+      const tpl = quoteSentEmail({
+        quoteReference,
+        organizationName,
+        clientName,
+        amount,
+        validUntil,
+        respondUrl,
+      });
+      await deps.emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
+      return;
+    }
     case 'email.invoice': {
       // Phase 6 (Banani NewInvoice → InvoiceCreatedSuccess / InvoiceResendEmail
       // → InvoiceEmailSent) — emitted by POST /api/invoices and

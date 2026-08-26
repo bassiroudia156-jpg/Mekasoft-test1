@@ -13,16 +13,15 @@ import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useMobileSidebar } from '@/contexts/MobileSidebarContext';
 import { useRefetchOnFocus } from '@/lib/useRefetchOnFocus';
-import { formatInterventionDate } from '@/lib/format-intervention-date';
 import Sidebar from '@/components/layout/Sidebar';
 import VehicleRow from '@/components/vehicles/VehicleRow';
 import EditVehicleModal from '@/components/vehicles/EditVehicleModal';
+import EditClientModal from '@/components/clients/EditClientModal';
 import DeleteVehicleModal, {
   type DeleteVehicleModalTarget,
 } from '@/components/vehicles/DeleteVehicleModal';
-import InterventionRow, {
-  type InterventionStatus,
-} from '@/components/interventions/InterventionRow';
+import { type InterventionStatus } from '@/components/interventions/InterventionRow';
+import InterventionHistoryCard from '@/components/interventions/InterventionHistoryCard';
 import UserAvatar from '@/components/ui/UserAvatar';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -52,6 +51,9 @@ interface ClientDetail {
   interventionsCount: number;
   totalSpent: number;
   lastVisit: string | null;
+  billedAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
   interventions: {
     id: string;
     reference: string;
@@ -87,6 +89,7 @@ export default function ClientProfilePage() {
   const [editTarget, setEditTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteVehicleModalTarget | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editClientOpen, setEditClientOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -223,13 +226,19 @@ export default function ClientProfilePage() {
             </div>
           </div>
           {client && (
-            <Button
-              variant="primary"
-              onClick={() => router.push(`/interventions/new?clientId=${client.id}`)}
-            >
-              <Icon i="wrench" size={14} />
-              Nouvelle intervention
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setEditClientOpen(true)}>
+                <Icon i="pencil" size={14} />
+                Modifier
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => router.push(`/interventions/new?clientId=${client.id}`)}
+              >
+                <Icon i="wrench" size={14} />
+                Nouvelle intervention
+              </Button>
+            </div>
           )}
         </div>
 
@@ -343,6 +352,47 @@ export default function ClientProfilePage() {
 
               {/* Right column — vehicles + history */}
               <div className="flex-1 flex flex-col gap-4 min-w-0">
+                {/* Phase C item #10 (2026-08-25): facturé/payé/solde
+                    breakdown — the client profile only ever showed
+                    "totalSpent" (intervention-level, invoiced or not); this
+                    is invoice-level and payment-aware (see GET
+                    /api/clients/[id]'s own comment for why it sums
+                    Invoice.amountPaid rather than a status==='Payée'
+                    filter, now that partial payments exist). */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-surface border border-border rounded-md p-4">
+                    <div className="text-xs text-muted-foreground">Facturé</div>
+                    <div className="text-lg font-bold text-foreground mt-0.5">
+                      <AnimatedNumber
+                        value={client.billedAmount}
+                        format={(n) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`}
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-success/5 border border-success/10 rounded-md p-4">
+                    <div className="text-xs text-muted-foreground">Payé</div>
+                    <div className="text-lg font-bold text-success mt-0.5">
+                      <AnimatedNumber
+                        value={client.paidAmount}
+                        format={(n) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`}
+                      />
+                    </div>
+                  </div>
+                  <div
+                    className={`rounded-md p-4 border ${client.balanceAmount > 0 ? 'bg-warning/5 border-warning/10' : 'bg-surface border-border'}`}
+                  >
+                    <div className="text-xs text-muted-foreground">Solde</div>
+                    <div
+                      className={`text-lg font-bold mt-0.5 ${client.balanceAmount > 0 ? 'text-warning' : 'text-foreground'}`}
+                    >
+                      <AnimatedNumber
+                        value={client.balanceAmount}
+                        format={(n) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-surface border border-border rounded-md overflow-hidden">
                   <div className="flex items-center justify-between px-5 py-3 border-b border-border">
                     <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
@@ -375,6 +425,7 @@ export default function ClientProfilePage() {
                               : '—'
                           }
                           status={v.status}
+                          onView={() => router.push(`/vehicles/${v.id}`)}
                           onEdit={() => setEditTarget(v.id)}
                           onToggleStatus={() => void handleToggleStatus(v)}
                           onDelete={() =>
@@ -392,36 +443,10 @@ export default function ClientProfilePage() {
                   )}
                 </div>
 
-                <div className="bg-surface border border-border rounded-md overflow-hidden flex-1">
-                  <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-                    <div className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                      Historique des interventions
-                    </div>
-                  </div>
-                  {client.interventions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground p-5">
-                      Aucune intervention pour l&apos;instant.
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <div className="min-w-[700px]">
-                        {client.interventions.map((i) => (
-                          <InterventionRow
-                            key={i.id}
-                            id={i.reference}
-                            client={client.name}
-                            vehicle={i.vehicle}
-                            work={i.work}
-                            date={formatInterventionDate(i.createdAt)}
-                            amount={`${i.amount.toLocaleString('fr-FR')} FCFA`}
-                            status={i.status}
-                            onView={() => router.push(`/interventions/${i.id}`)}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <InterventionHistoryCard
+                  items={client.interventions.map((i) => ({ ...i, client: client.name }))}
+                  onView={(id) => router.push(`/interventions/${id}`)}
+                />
               </div>
             </div>
           )
@@ -449,6 +474,26 @@ export default function ClientProfilePage() {
             onSaved={() => {
               setEditTarget(null);
               toast('Véhicule mis à jour.', 'success');
+              setRefreshTick((t) => t + 1);
+            }}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={editClientOpen}
+        onClose={() => setEditClientOpen(false)}
+        title="Modifier le client"
+        icon="pencil"
+        maxWidth="lg"
+      >
+        {client && editClientOpen && (
+          <EditClientModal
+            clientId={client.id}
+            onClose={() => setEditClientOpen(false)}
+            onSaved={() => {
+              setEditClientOpen(false);
+              toast('Client mis à jour.', 'success');
               setRefreshTick((t) => t + 1);
             }}
           />

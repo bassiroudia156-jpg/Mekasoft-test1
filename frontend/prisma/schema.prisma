@@ -126,6 +126,7 @@ model Organization {
   interventions        Intervention[]
   invoices             Invoice[]
   payments             Payment[]
+  quotes               Quote[]
   subscription         Subscription?
   subscriptionPayments SubscriptionPayment[]
 
@@ -477,6 +478,7 @@ model Client {
   interventions Intervention[]
   invoices      Invoice[]
   payments      Payment[]
+  quotes        Quote[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -510,6 +512,7 @@ model Vehicle {
   notes         String?
 
   interventions Intervention[]
+  quotes        Quote[]
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -559,6 +562,11 @@ model Intervention {
 
   parts     Part[]
   invoice   Invoice? // one invoice per intervention (see Invoice.interventionId unique)
+  // Set on either side of the Quote↔Intervention link (2026-08-25): an
+  // intervention created FROM an accepted quote (see Quote.interventionId),
+  // OR an intervention that later had a quote generated from it via the
+  // existing devis-preview flow. Nullable — most interventions have none.
+  quote     Quote?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -586,6 +594,91 @@ model Part {
   createdAt DateTime @default(now())
 
   @@index([interventionId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Quotes (devis) — 2026-08-25, Phase C decision #8: upgraded from the
+// PDF-preview-only devis (still available, unchanged, off Intervention
+// directly) to a real object with a lifecycle. Two creation paths:
+//   1. From an existing Intervention (mirrors the old devis-preview flow —
+//      interventionId set at creation, work/parts/amounts snapshotted from
+//      it so the quote doesn't silently drift if the intervention is
+//      edited afterward).
+//   2. From scratch (client + vehicle picked directly, no Intervention yet
+//      — "chiffrer avant d'accepter le travail") — interventionId null
+//      until/unless the quote is later converted.
+// `status` DRAFT → SENT → ACCEPTED | REJECTED | EXPIRED. ACCEPTED +
+// interventionId set = "converted" (no separate CONVERTED status — one
+// less transition to get wrong). `token` powers the public, no-auth
+// accept/reject link (same shape as OrganizationInvite.token — a
+// crypto-random base64url string, not guessable); staff can ALSO record
+// accept/reject manually from the back-office for a client who responded
+// by phone instead of clicking the link — both paths write the same
+// status/respondedAt/respondedByName fields, `respondedByName` just says
+// "Client (lien)" vs the staff member's name so the audit trail shows how.
+// ───────────────────────────────────────────────────────────────────────
+model Quote {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reference      String // DEV-YYYY-### sequential per organization per calendar year
+
+  clientId  String
+  client    Client  @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  // Nullable: null until either created from an intervention, or converted
+  // to one after acceptance. onDelete SetNull rather than Restrict — no
+  // route deletes an Intervention today, but a quote's own history
+  // shouldn't become undeletable-by-proxy if that ever changes.
+  interventionId String?       @unique
+  intervention   Intervention? @relation(fields: [interventionId], references: [id], onDelete: SetNull)
+
+  work        String // description of work — snapshot, independent of the source intervention's own `work` after creation
+  laborAmount Int    @default(0)
+  partsAmount Int    @default(0)
+  taxRatePct  Int    @default(18)
+  taxAmount   Int    @default(0)
+  subtotal    Int    @default(0) // laborAmount + partsAmount
+  amount      Int    @default(0) // subtotal + taxAmount (TTC)
+
+  status     String    @default("DRAFT") // DRAFT | SENT | ACCEPTED | REJECTED | EXPIRED
+  token      String    @unique // public accept/reject link — POST /api/quotes/respond/[token]
+  validUntil DateTime // defaults to +30 days at creation, editable while DRAFT
+
+  sentAt          DateTime?
+  respondedAt     DateTime?
+  respondedByName String? // "Client (lien)" for the public-token path, or the staff member's name for a manual entry
+
+  notes String?
+
+  parts     QuotePart[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([organizationId, reference])
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([clientId])
+  @@index([vehicleId])
+}
+
+model QuotePart {
+  id      String @id @default(cuid())
+  quoteId String
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  name      String
+  supplier  String?
+  quantity  Int     @default(1)
+  unit      String  @default("pcs")
+  unitPrice Int // FCFA
+  total     Int // FCFA, quantity * unitPrice, denormalized
+
+  createdAt DateTime @default(now())
+
+  @@index([quoteId])
 }
 
 // ───────────────────────────────────────────────────────────────────────
