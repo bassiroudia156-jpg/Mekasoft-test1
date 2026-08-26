@@ -198,4 +198,62 @@ describe('POST /api/auth/login', () => {
     expect(__cookieStore.has('app-refresh')).toBe(false);
     expect(__cookieStore.has('app-csrf')).toBe(false);
   });
+
+  // 2026-08-24 — dual login (phone as an alternate identifier to email).
+  it('Test 10: phone login happy path — looks up by phone, issues cookies', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'a@b.com',
+      passwordHash: '$2a$12$hashhashhashhashhashhashhashhashhashhashhashhashhashhha',
+      emailVerifiedAt: new Date(),
+      tokenVersion: 0,
+    } as never);
+    vi.mocked(verifyPassword).mockResolvedValue(true);
+
+    const res = await POST(makeReq({ phone: '+221771234567', password: 'longenough' }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Response `user.email` is always the DB row's real email, regardless
+    // of which identifier was used to log in.
+    expect(body).toMatchObject({ ok: true, user: { sub: 'u1', email: 'a@b.com' } });
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { phone: '+221771234567' } }),
+    );
+    // Rate-limit/lockout/recordSuccess are keyed on the identifier actually
+    // used to log in (the phone), not the account's email.
+    expect(recordSuccess).toHaveBeenCalledWith('+221771234567');
+    expect(__cookieStore.has('app-token')).toBe(true);
+  });
+
+  it('Test 11: phone login, no user — INVALID_CREDENTIALS, dummy compare called', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+
+    const res = await POST(makeReq({ phone: '+221700000000', password: 'longenough' }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('INVALID_CREDENTIALS');
+    expect(dummyBcryptCompare).toHaveBeenCalledWith('longenough');
+  });
+
+  it('Test 12: both email and phone provided — VALIDATION_FAILED', async () => {
+    const res = await POST(
+      makeReq({ email: 'a@b.com', phone: '+221771234567', password: 'longenough' }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('VALIDATION_FAILED');
+    expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('Test 13: neither email nor phone provided — VALIDATION_FAILED', async () => {
+    const res = await POST(makeReq({ password: 'longenough' }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('VALIDATION_FAILED');
+  });
+
+  it('Test 14: malformed phone (not E.164) — VALIDATION_FAILED', async () => {
+    const res = await POST(makeReq({ phone: '0771234567', password: 'longenough' }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('VALIDATION_FAILED');
+  });
 });

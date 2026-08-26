@@ -1,1 +1,223 @@
 @import 'tailwindcss';
+
+/* MekaSoft design tokens — ported from Banani flow "Tableau Atelier"
+ * (https://app.banani.co/flow/83o75a2tYyMD). See
+ * .planning/banani/IMPLEMENTATION-PLAN.md for the full design-system delta
+ * notes. --font-body / --font-headings resolve to the next/font variable set
+ * in layout.tsx (IBM Plex Sans), not a bare font-family string, so Next
+ * keeps optimizing/self-hosting the font load.
+ * --color-primary / --color-accent realigned 2026-08-18 to the official
+ * MekaSoft logo colors (#152A4E navy, #DE6A34 orange — see
+ * public/brand/logo-*.svg) — previously close-but-not-exact placeholders
+ * (#0d3b6e / #e85c1a). Same two hex values are also hardcoded in
+ * email-brand.ts, auth/email-templates.ts and the react-pdf stylesheets
+ * (invoices/payment-ledger/reports), which can't read CSS custom
+ * properties — keep those in sync if this ever changes again. */
+@theme {
+  --color-background: #f5f4f0;
+  --color-foreground: #0d1b2a;
+  --color-border: #d4d0c8;
+  --color-input: #eceae4;
+  --color-primary: #152a4e;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #e8f0f9;
+  --color-secondary-foreground: #152a4e;
+  --color-accent: #de6a34;
+  --color-accent-foreground: #ffffff;
+  --color-muted: #e2e0da;
+  --color-muted-foreground: #7a7568;
+  --color-success: #1a7a4a;
+  --color-success-foreground: #ffffff;
+  --color-warning: #c97a17;
+  --color-warning-foreground: #ffffff;
+  --color-surface: #fdfaf7;
+  /* Not in Banani's own /style.css — DeleteVehicleConfirmation references
+   * bg-destructive/text-destructive without the flow ever defining the
+   * token. Filled in here (standard red) since destructive actions recur
+   * (client/vehicle/invoice deletion) and deserve their own semantic color,
+   * distinct from --color-warning (used for logout confirmation). */
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius: var(--radius-sm);
+
+  --font-body: var(--font-ibm-plex-sans), sans-serif;
+  --font-headings: var(--font-ibm-plex-sans), sans-serif;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --text-3xl: 34px;
+  --text-4xl: 48px;
+}
+
+/* Defensive: nothing in this app should ever cause the page itself to
+ * scroll sideways — wide tables scroll inside their own overflow-x-auto
+ * wrapper (see clients/vehicles/interventions/invoices/payments), and
+ * off-canvas panels (SlideOver) are positioned via transform. Both patterns
+ * already behave, but a stray min-w-[Npx] without min-w-0 on its flex
+ * ancestor (a real bug fixed 2026-08-19 on all 5 table pages) or a future
+ * one like it should degrade to "content clipped", never "whole page
+ * scrolls right" — this rule is the backstop for that class of bug. */
+html {
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  overflow-x: hidden;
+}
+
+/* Marketing-site micro-interactions (2026-08-18 request: "un peu
+ * d'animation sur les boutons CTA ainsi que sur les pages"). Plain CSS
+ * keyframes — no animation library added, consistent with this project's
+ * zero-extra-dependency Tailwind v4 setup. `.animate-fade-in-up` runs once
+ * on mount (hero, terms/privacy content) or is triggered by the Reveal
+ * component's IntersectionObserver (landing-page sections below the fold).
+ * `.animate-dropdown-in` is the SearchSelect "menu roulant" open animation. */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out both;
+}
+
+.animate-dropdown-in {
+  animation: dropdown-in 0.15s ease-out both;
+}
+
+/* Slow bob on the hero's BrowserFrame mockup (2026-08-18 "spectaculaire"
+ * request) — subtle, continuous, paused entirely under reduced-motion. */
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float-y 6s ease-in-out infinite;
+}
+
+/* 2026-08-18 — "des effets ripple... assez premium... pas de too much".
+ * One expanding-and-fading circle per press, spawned by Button.tsx at the
+ * pointer position and removed after this animation completes. `bg-current`
+ * on the span (set in Button.tsx) means this keyframe stays purely about
+ * shape/opacity — color comes from whichever variant fired it. */
+@keyframes button-ripple {
+  from {
+    transform: scale(0);
+    opacity: 0.22;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+.animate-button-ripple {
+  animation: button-ripple 500ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-dropdown-in,
+  .animate-float,
+  .animate-button-ripple {
+    animation: none;
+    display: none;
+  }
+}
+
+/* 2026-08-18 — DatePicker.tsx's calendar popover open animation. Same
+ * fade+slide language as `.animate-dropdown-in` above, but only disabling
+ * the animation under reduced-motion (not hiding the element) — the
+ * calendar is the field's only way to pick a date, so it must still render. */
+@keyframes calendar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-calendar-in {
+  animation: calendar-in 0.15s ease-out both;
+  transform-origin: top left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-calendar-in {
+    animation: none;
+  }
+}
+
+/* Print support (Phase 5 — Banani PrintDevis/PrintSent). The devis page
+ * wraps its Sidebar/header/toolbar in .print-hide and the actual document
+ * in .print-document — @media print hides everything else so "Lancer
+ * l'impression" only prints the devis itself, not the whole app chrome.
+ *
+ * 2026-08-24 fix: printed page came out entirely blank. The document sits
+ * inside a `flex-1 overflow-y-auto` scroll container (so it scrolls on
+ * screen inside the app's `min-h-screen` shell) — print engines only
+ * rasterize what's inside a scrollable container's current viewport, not
+ * its full scrollable content, so anything beyond one screen's height
+ * never made it onto the page. `.print-scroll-reset` (added to that
+ * container in devis/page.tsx) drops the height constraint and lets the
+ * document flow and paginate naturally instead. */
+@media print {
+  .print-hide {
+    display: none !important;
+  }
+  .print-scroll-reset {
+    overflow: visible !important;
+    flex: none !important;
+    height: auto !important;
+    display: block !important;
+  }
+  .print-document {
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff;
+  }
+}

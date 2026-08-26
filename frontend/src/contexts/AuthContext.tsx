@@ -9,6 +9,12 @@ import { COOKIE_PREFIX } from '@/lib/constants';
 export interface User {
   id: string;
   email: string;
+  /** Full display name, e.g. "Moussa Diallo". Null until set (OAuth prefill or EditProfileModal). */
+  name: string | null;
+  /** E.164 phone, editable via EditProfileModal / PATCH /api/auth/me. */
+  phone: string | null;
+  /** Real photo URL (OAuth prefill or user upload) — null falls back to initials everywhere. */
+  avatarUrl: string | null;
   emailVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -16,6 +22,16 @@ export interface User {
   hasPassword: boolean;
   /** Provider names already linked, e.g. ['google']. Empty for pure email/password accounts. */
   linkedProviders: string[];
+  /** Null while the caller has no organization yet (Phase 2's org-less state). */
+  organizationId: string | null;
+  /** OWNER | ADMIN | MEMBER — null alongside organizationId. */
+  orgRole: string | null;
+  /** Cosmetic job-title label (Gérant / Mécanicien / …) — display only, see TeamManagementModal. */
+  jobTitle: string | null;
+  /** App-wide role — USER | ADMIN | SUPERADMIN. Gates the header "Admin"
+   * button (2026-08-20). Purely presentational client-side; every admin
+   * route re-checks this server-side regardless. */
+  role: 'USER' | 'ADMIN' | 'SUPERADMIN';
 }
 
 interface AuthContextValue {
@@ -29,6 +45,22 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// 2026-08-19: set right before an explicit logout() clears `user`, read by
+// useUser()'s own auto-redirect effect below. Every logout entry point
+// (Sidebar, /profile, PublicNav) already does its own
+// `router.push('/login?logged_out=1')` right after `await logout()` — but
+// useUser()'s protective "no session, bounce to redirectTo" effect ALSO
+// fires the instant `user` flips to null (same render, since both read the
+// same state), and since both are `router.*` calls racing to update the
+// same history entry, whichever commits second wins and can silently drop
+// the query string, killing the "you were logged out" toast on /login.
+// Rather than fight that ordering, make both navigations resolve to the
+// identical URL: this flag carries the query string over to the automatic
+// redirect so it doesn't matter which one "wins". Cleared on the next
+// successful fetchUser() so a later silent session expiry (not a real
+// logout) doesn't misreport itself as one.
+let pendingLogoutQuery = '';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api<{ user: User; csrfToken?: string }>('/api/auth/me');
       setUser(res.user);
+      pendingLogoutQuery = '';
       if (res.csrfToken) storeCsrfToken(res.csrfToken);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -82,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     clearCsrfToken();
     invalidateCachePrefix('/api/');
+    pendingLogoutQuery = '?logged_out=1';
     setUser(null);
     setLoggingOut(false);
   }, []);
@@ -133,7 +167,10 @@ export function useUser(redirectTo: string = '/login'): User | null {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace(redirectTo);
+      const target = pendingLogoutQuery
+        ? `${redirectTo}${redirectTo.includes('?') ? '&' : '?'}${pendingLogoutQuery.slice(1)}`
+        : redirectTo;
+      router.replace(target);
     }
   }, [loading, user, redirectTo, router]);
 

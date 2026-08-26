@@ -16,6 +16,13 @@ export interface ListUnsubscribe {
   mailto?: string;
 }
 
+export interface EmailAttachment {
+  filename: string;
+  /** Base64-encoded file content. */
+  content: string;
+  contentType?: string;
+}
+
 export interface SendEmailInput {
   to: string;
   subject: string;
@@ -23,6 +30,8 @@ export interface SendEmailInput {
   text?: string;
   /** RFC 2369 — adds List-Unsubscribe + List-Unsubscribe-Post=One-Click headers. */
   listUnsubscribe?: ListUnsubscribe;
+  /** Added in Phase 6 for invoice PDFs — optional, existing callers unaffected. */
+  attachments?: EmailAttachment[];
 }
 
 export interface Mailer {
@@ -75,6 +84,7 @@ export function createMailer(env: CreateMailerEnv, options: CreateMailerOptions 
         html: string;
         text?: string;
         headers?: Record<string, string>;
+        attachments?: { filename: string; content: string; contentType?: string }[];
       } = {
         from,
         to: input.to,
@@ -83,6 +93,13 @@ export function createMailer(env: CreateMailerEnv, options: CreateMailerOptions 
       };
       if (input.text !== undefined) sendArgs.text = input.text;
       if (Object.keys(headers).length > 0) sendArgs.headers = headers;
+      if (input.attachments && input.attachments.length > 0) {
+        sendArgs.attachments = input.attachments.map((a) => ({
+          filename: a.filename,
+          content: a.content,
+          ...(a.contentType !== undefined ? { contentType: a.contentType } : {}),
+        }));
+      }
 
       const { data, error } = await client.emails.send(sendArgs);
 

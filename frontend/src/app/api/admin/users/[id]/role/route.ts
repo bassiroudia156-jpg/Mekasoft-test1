@@ -54,7 +54,7 @@ export async function PATCH(
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'VALIDATION_FAILED', message: 'Invalid request body' },
-        { status: 400 },
+        { status: 400, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
 
@@ -94,15 +94,18 @@ export async function PATCH(
     if (result.kind === 'NOT_FOUND') {
       return NextResponse.json(
         { error: 'USER_NOT_FOUND', message: 'User not found' },
-        { status: 404 },
+        { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
     if (result.kind === 'LAST_SUPERADMIN') {
       return NextResponse.json(
         { error: 'LAST_SUPERADMIN', message: 'Refuse to demote the last SUPERADMIN.' },
-        { status: 409 },
+        { status: 409, headers: { 'x-request-id': reqCtx.requestId } },
       );
     }
-    return NextResponse.json({ user: result.user }, { status: 200 });
+    return NextResponse.json(
+      { user: result.user },
+      { status: 200, headers: { 'x-request-id': reqCtx.requestId } },
+    );
   });
 }

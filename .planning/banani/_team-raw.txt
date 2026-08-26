@@ -1,0 +1,646 @@
+##### FILE: AddTeamMemberModal.jsx #####
+import Sidebar from '@components/Sidebar';
+import TopBar from '@components/TopBar';
+import ManagerProfilePanel from '@components/ManagerProfilePanel';
+import Icon from '@global/Icon';
+import UserAvatar from '@global/UserAvatar';
+
+export const displayName = 'Add Team Member Modal';
+export const screenSize = 'desktop';
+
+export default function AddTeamMemberModal() {
+  return (
+    <div className="flex bg-background min-h-full">
+      <Sidebar active="dashboard" />
+
+      <div className="flex flex-col flex-1">
+        <TopBar />
+
+        <div className="flex flex-col items-center justify-center flex-1 p-6">
+          {/* Modal Container */}
+          <div className="max-w-md w-full bg-surface border border-border rounded-lg p-8 shadow-lg">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10">
+                <Icon i="user-plus" size={20} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold font-headings text-foreground">{t('Ajouter un membre')}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('Inviter quelqu\'un à votre équipe')}</p>
+              </div>
+            </div>
+
+            {/* Form */}
+            <div className="space-y-4">
+              {/* Full Name */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t('Nom complet')}</label>
+                <div className="border border-border rounded-md px-3 py-2.5 bg-input text-foreground">
+                  <span className="text-muted-foreground text-sm">{t('Ex: Jean Dupont')}</span>
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t('Email')}</label>
+                <div className="border border-border rounded-md px-3 py-2.5 bg-input text-foreground">
+                  <span className="text-muted-foreground text-sm">{t('Ex: jean.dupont@example.com')}</span>
+                </div>
+              </div>
+
+              {/* Role */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t('Rôle')}</label>
+                <div className="border border-border rounded-md px-3 py-2.5 bg-input text-foreground flex items-center justify-between">
+                  <span className="text-muted-foreground text-sm">{t('Sélectionner un rôle')}</span>
+                  <Icon i="chevron-down" size={14} className="text-muted-foreground" />
+                </div>
+              </div>
+
+              {/* Role Description */}
+              <div className="bg-background rounded-md p-3 border border-border">
+                <p className="text-xs font-medium text-foreground mb-2">{t('Rôles disponibles :')}</p>
+                <ul className="space-y-1.5 text-xs text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <Icon i="check" size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-foreground">{t('Administrateur')}</p>
+                      <p className="text-xs">{t('Accès complet')}</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon i="check" size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-foreground">{t('Mécanicien')}</p>
+                      <p className="text-xs">{t('Gestion des interventions')}</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon i="check" size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-foreground">{t('Comptable')}</p>
+                      <p className="text-xs">{t('Gestion financière')}</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Info box */}
+              <div className="bg-primary/10 border border-primary/20 rounded-md px-3 py-2">
+                <div className="flex gap-2 text-xs">
+                  <Icon i="info" size={12} className="text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-primary">
+                    {t('Un email d\'invitation sera envoyé au membre pour lui demander de rejoindre votre équipe.')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-3 pt-6 border-t border-border">
+              <button className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-md text-sm font-medium">
+                <Icon i="check" size={14} />
+                {t('Envoyer l\'invitation')}
+              </button>
+              <button className="flex items-center justify-center px-4 py-2.5 rounded-md text-sm font-medium border border-border bg-background text-foreground">
+                {t('Annuler')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Manager Profile Panel - Still Open in background */}
+      <ManagerProfilePanel isOpen={true} />
+    </div>
+  );
+}
+
+
+##### FILE: TeamManagementModal.jsx #####
+import Sidebar from '@components/Sidebar';
+import TopBar from '@components/TopBar';
+import Icon from '@global/Icon';
+import UserAvatar from '@global/UserAvatar';
+
+export const displayName = 'Team Management Modal';
+export const screenSize = 'desktop';
+
+export default function TeamManagementModal() {
+  return (
+    <div className="flex bg-background min-h-full">
+      <Sidebar active="dashboard" />
+
+      <div className="flex flex-col flex-1">
+        <TopBar />
+
+        <div className="flex flex-col items-center justify-center flex-1 p-6">
+          {/* Modal Container */}
+          <div className="max-w-2xl w-full bg-surface border border-border rounded-lg p-8 shadow-lg">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6 pb-6 border-b border-border">
+              <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10">
+                <Icon i="users" size={20} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold font-headings text-foreground">{t('Gérer l\'équipe')}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('Administrez les membres de votre équipe')}</p>
+              </div>
+            </div>
+
+            {/* Add Member Button */}
+            <div className="mb-6">
+              <button className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium">
+                <Icon i="user-plus" size={14} />
+                {t('Ajouter un membre')}
+              </button>
+            </div>
+
+            {/* Team Members List */}
+            <div className="space-y-3">
+              {/* Member 1 - Me (Manager) */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/20">
+                <div className="flex items-center gap-3 flex-1">
+                  <UserAvatar gender="male" ageGroup="35-50" heritage="African" index={2} className="w-10 h-10" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{t('Moussa Diallo')}</p>
+                    <p className="text-xs text-muted-foreground">{t('moussa.diallo@mekasoft.sn')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20">
+                    <Icon i="crown" size={12} className="text-primary" />
+                    <span className="text-xs font-medium text-primary">{t('Gérant')}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{t('(Vous)')}</span>
+                </div>
+              </div>
+
+              {/* Member 2 - Mechanic */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-3 flex-1">
+                  <UserAvatar gender="male" ageGroup="25-35" heritage="East Asian" index={4} className="w-10 h-10" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{t('Khalid Ndiaye')}</p>
+                    <p className="text-xs text-muted-foreground">{t('khalid.ndiaye@mekasoft.sn')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary/20 border border-secondary/20">
+                    <Icon i="wrench" size={12} className="text-secondary-foreground" />
+                    <span className="text-xs font-medium text-secondary-foreground">{t('Mécanicien')}</span>
+                  </div>
+                  <button className="p-1.5 rounded-md hover:bg-muted/5">
+                    <Icon i="more-horizontal" size={14} className="text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Member 3 - Accountant */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-3 flex-1">
+                  <UserAvatar gender="female" ageGroup="25-35" heritage="South Asian" index={5} className="w-10 h-10" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{t('Aminata Sow')}</p>
+                    <p className="text-xs text-muted-foreground">{t('aminata.sow@mekasoft.sn')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary/20 border border-secondary/20">
+                    <Icon i="calculator" size={12} className="text-secondary-foreground" />
+                    <span className="text-xs font-medium text-secondary-foreground">{t('Comptable')}</span>
+                  </div>
+                  <button className="p-1.5 rounded-md hover:bg-muted/5">
+                    <Icon i="more-horizontal" size={14} className="text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Member 4 - Pending */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/10">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="w-10 h-10 rounded-full bg-muted/30 flex items-center justify-center">
+                    <Icon i="user" size={16} className="text-muted-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{t('Jean Dupont')}</p>
+                    <p className="text-xs text-muted-foreground">{t('jean.dupont@mekasoft.sn')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted/20 border border-muted">
+                    <Icon i="clock" size={12} className="text-muted-foreground" />
+                    <span className="text-xs font-medium text-muted-foreground">{t('En attente')}</span>
+                  </div>
+                  <button className="p-1.5 rounded-md hover:bg-muted/5">
+                    <Icon i="more-horizontal" size={14} className="text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="mt-6 pt-6 border-t border-border">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">4</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('Total')}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-success">3</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('Actifs')}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-muted-foreground">1</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('En attente')}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-6 border-t border-border mt-6">
+              <button className="flex-1 flex items-center justify-center px-4 py-2.5 rounded-md text-sm font-medium border border-border bg-background text-foreground">
+                {t('Fermer')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+##### FILE: TeamManagementModal_next1.jsx #####
+import Sidebar from '@components/Sidebar';
+import TopBar from '@components/TopBar';
+import Icon from '@global/Icon';
+
+export const displayName = 'Add Team Member Form';
+export const screenSize = 'desktop';
+
+export default function AddTeamMemberForm() {
+  return (
+    <div className="flex bg-background min-h-full">
+      <Sidebar active="dashboard" />
+
+      <div className="flex flex-col flex-1">
+        <TopBar />
+
+        <div className="flex flex-col items-center justify-center flex-1 p-6">
+          {/* Modal Container */}
+          <div className="max-w-md w-full bg-surface border border-border rounded-lg p-8 shadow-lg">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10">
+                <Icon i="user-plus" size={20} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold font-headings text-foreground">{t('Ajouter un membre')}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('Inviter quelqu\'un à votre équipe')}</p>
+              </div>
+            </div>
+
+            {/* Form */}
+            <div className="space-y-4">
+              {/* Full Name */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t('Nom complet')}</label>
+                <div className="border border-border rounded-md px-3 py-2.5 bg-input text-foreground">
+                  <span className="text-muted-foreground text-sm">{t('Ex: Jean Dupont')}</span>
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t('Email')}</label>
+                <div className="border border-border rounded-md px-3 py-2.5 bg-input text-foreground">
+                  <span className="text-muted-foreground text-sm">{t('Ex: jean.dupont@mekasoft.sn')}</span>
+                </div>
+              </div>
+
+              {/* Role */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium uppercase tracking-widest text-muted-foreground">{t('Rôle')}</label>
+                <div className="border border-border rounded-md px-3 py-2.5 bg-input text-foreground flex items-center justify-between">
+                  <span className="text-muted-foreground text-sm">{t('Sélectionner un rôle')}</span>
+                  <Icon i="chevron-down" size={14} className="text-muted-foreground" />
+                </div>
+              </div>
+
+              {/* Role Description */}
+              <div className="bg-background rounded-md p-3 border border-border">
+                <p className="text-xs font-medium text-foreground mb-2">{t('Rôles disponibles :')}</p>
+                <ul className="space-y-1.5 text-xs text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <Icon i="check" size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-foreground">{t('Administrateur')}</p>
+                      <p className="text-xs">{t('Accès complet')}</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon i="check" size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-foreground">{t('Mécanicien')}</p>
+                      <p className="text-xs">{t('Gestion des interventions')}</p>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Icon i="check" size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-foreground">{t('Comptable')}</p>
+                      <p className="text-xs">{t('Gestion financière')}</p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Info box */}
+              <div className="bg-primary/10 border border-primary/20 rounded-md px-3 py-2">
+                <div className="flex gap-2 text-xs">
+                  <Icon i="info" size={12} className="text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-primary">
+                    {t('Un email d\'invitation sera envoyé au membre pour lui demander de rejoindre votre équipe.')}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-3 pt-6 border-t border-border">
+              <button className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-md text-sm font-medium">
+                <Icon i="check" size={14} />
+                {t('Envoyer l\'invitation')}
+              </button>
+              <button className="flex items-center justify-center px-4 py-2.5 rounded-md text-sm font-medium border border-border bg-background text-foreground">
+                {t('Annuler')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+##### FILE: TeamMemberInvitationSent.jsx #####
+import Sidebar from '@components/Sidebar';
+import TopBar from '@components/TopBar';
+import Icon from '@global/Icon';
+
+export const displayName = 'Team Member Invitation Sent';
+export const screenSize = 'desktop';
+
+export default function TeamMemberInvitationSent() {
+  return (
+    <div className="flex bg-background min-h-full">
+      <Sidebar active="dashboard" />
+
+      <div className="flex flex-col flex-1">
+        <TopBar />
+
+        <div className="flex flex-col items-center justify-center flex-1 p-6">
+          {/* Modal Container */}
+          <div className="max-w-md w-full bg-surface border border-border rounded-lg p-8 shadow-lg">
+            {/* Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-success/10">
+                <Icon i="check-circle" size={32} className="text-success" />
+              </div>
+            </div>
+
+            {/* Header */}
+            <div className="text-center mb-6">
+              <h2 className="text-lg font-bold font-headings text-foreground mb-2">{t('Invitation envoyée')}</h2>
+              <p className="text-xs text-muted-foreground">{t('Votre invitation a été envoyée avec succès')}</p>
+            </div>
+
+            {/* Details Box */}
+            <div className="bg-background rounded-md p-4 border border-border mb-6">
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <Icon i="user" size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">{t('Nom')}</p>
+                    <p className="text-sm text-foreground font-medium">Jean Dupont</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Icon i="mail" size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">{t('Email')}</p>
+                    <p className="text-sm text-foreground font-medium">jean.dupont@mekasoft.sn</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Icon i="briefcase" size={14} className="text-muted-foreground mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">{t('Rôle')}</p>
+                    <p className="text-sm text-foreground font-medium">{t('Mécanicien')}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Info Box */}
+            <div className="bg-primary/10 border border-primary/20 rounded-md px-3 py-2 mb-6">
+              <div className="flex gap-2 text-xs">
+                <Icon i="info" size={12} className="text-primary flex-shrink-0 mt-0.5" />
+                <p className="text-primary">
+                  {t('Un email d\'invitation a été envoyé à jean.dupont@mekasoft.sn. Il devra confirmer son adresse email pour rejoindre votre équipe.')}
+                </p>
+              </div>
+            </div>
+
+            {/* Next Steps */}
+            <div className="bg-background rounded-md p-4 border border-border mb-6">
+              <p className="text-xs font-medium text-foreground mb-2">{t('Prochaines étapes :')}</p>
+              <ol className="space-y-1.5 text-xs text-muted-foreground">
+                <li className="flex gap-2">
+                  <span className="font-medium text-foreground flex-shrink-0">1.</span>
+                  <span>{t('Vérifiez votre email pour la confirmation')}</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-medium text-foreground flex-shrink-0">2.</span>
+                  <span>{t('Complétez votre profil')}</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="font-medium text-foreground flex-shrink-0">3.</span>
+                  <span>{t('Commencez à utiliser MekaSoft')}</span>
+                </li>
+              </ol>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col gap-3">
+              <a className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-md text-sm font-medium">
+                <Icon i="arrow-right" size={14} />
+                {t('Retour à la gestion d\'équipe')}
+              </a>
+              <button className="flex items-center justify-center px-4 py-2.5 rounded-md text-sm font-medium border border-border bg-background text-foreground">
+                {t('Ajouter un autre membre')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+##### FILE: TeamManagementWithInvitation.jsx #####
+import Sidebar from '@components/Sidebar';
+import TopBar from '@components/TopBar';
+import Icon from '@global/Icon';
+import UserAvatar from '@global/UserAvatar';
+
+export const displayName = 'Team Management with Updated Member List';
+export const screenSize = 'desktop';
+
+export default function TeamManagementUpdated() {
+  return (
+    <div className="flex bg-background min-h-full">
+      <Sidebar active="dashboard" />
+
+      <div className="flex flex-col flex-1">
+        <TopBar />
+
+        <div className="flex flex-col items-center justify-center flex-1 p-6">
+          {/* Modal Container */}
+          <div className="max-w-2xl w-full bg-surface border border-border rounded-lg p-8 shadow-lg">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6 pb-6 border-b border-border">
+              <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10">
+                <Icon i="users" size={20} className="text-primary" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold font-headings text-foreground">{t('Gérer l\'équipe')}</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('Administrez les membres de votre équipe')}</p>
+              </div>
+            </div>
+
+            {/* Add Member Button */}
+            <div className="mb-6">
+              <button className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium">
+                <Icon i="user-plus" size={14} />
+                {t('Ajouter un membre')}
+              </button>
+            </div>
+
+            {/* Team Members List */}
+            <div className="space-y-3">
+              {/* Member 1 - Me (Manager) */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/20">
+                <div className="flex items-center gap-3 flex-1">
+                  <UserAvatar gender="male" ageGroup="35-50" heritage="African" index={2} className="w-10 h-10" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{t('Moussa Diallo')}</p>
+                    <p className="text-xs text-muted-foreground">{t('moussa.diallo@mekasoft.sn')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20">
+                    <Icon i="crown" size={12} className="text-primary" />
+                    <span className="text-xs font-medium text-primary">{t('Gérant')}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{t('(Vous)')}</span>
+                </div>
+              </div>
+
+              {/* Member 2 - Mechanic */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-3 flex-1">
+                  <UserAvatar gender="male" ageGroup="25-35" heritage="East Asian" index={4} className="w-10 h-10" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{t('Khalid Ndiaye')}</p>
+                    <p className="text-xs text-muted-foreground">{t('khalid.ndiaye@mekasoft.sn')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary/20 border border-secondary/20">
+                    <Icon i="wrench" size={12} className="text-secondary-foreground" />
+                    <span className="text-xs font-medium text-secondary-foreground">{t('Mécanicien')}</span>
+                  </div>
+                  <button className="p-1.5 rounded-md hover:bg-muted/5">
+                    <Icon i="more-horizontal" size={14} className="text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Member 3 - Accountant */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                <div className="flex items-center gap-3 flex-1">
+                  <UserAvatar gender="female" ageGroup="25-35" heritage="South Asian" index={5} className="w-10 h-10" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{t('Aminata Sow')}</p>
+                    <p className="text-xs text-muted-foreground">{t('aminata.sow@mekasoft.sn')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary/20 border border-secondary/20">
+                    <Icon i="calculator" size={12} className="text-secondary-foreground" />
+                    <span className="text-xs font-medium text-secondary-foreground">{t('Comptable')}</span>
+                  </div>
+                  <button className="p-1.5 rounded-md hover:bg-muted/5">
+                    <Icon i="more-horizontal" size={14} className="text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Member 4 - Invitation Sent (updated status) */}
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-primary/5">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="w-10 h-10 rounded-full bg-muted/30 flex items-center justify-center">
+                    <Icon i="user" size={16} className="text-muted-foreground" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{t('Jean Dupont')}</p>
+                    <p className="text-xs text-muted-foreground">{t('jean.dupont@mekasoft.sn')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/20 border border-primary/30">
+                    <Icon i="send" size={12} className="text-primary" />
+                    <span className="text-xs font-medium text-primary">{t('Invitation envoyée')}</span>
+                  </div>
+                  <button className="p-1.5 rounded-md hover:bg-muted/5">
+                    <Icon i="more-horizontal" size={14} className="text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="mt-6 pt-6 border-t border-border">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">4</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('Total')}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-success">3</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('Actifs')}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">1</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('Invitations en attente')}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-6 border-t border-border mt-6">
+              <button className="flex-1 flex items-center justify-center px-4 py-2.5 rounded-md text-sm font-medium border border-border bg-background text-foreground">
+                {t('Fermer')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+

@@ -104,7 +104,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, emailVerifiedAt: true },
     });
     if (!user) {
       const res = NextResponse.json(
@@ -168,6 +168,12 @@ export async function POST(req: NextRequest): Promise<Response> {
           data: {
             passwordHash,
             tokenVersion: { increment: 1 },
+            // Successfully consuming a PASSWORD_RESET code IS proof of inbox
+            // control — the same standard EMAIL_VERIFY codes are held to.
+            // Needed for the anonymous-checkout welcome flow (2026-08-19),
+            // whose brand-new accounts have no other verification step;
+            // harmless no-op for every other (already-verified) caller.
+            ...(user.emailVerifiedAt ? {} : { emailVerifiedAt: new Date() }),
           },
         });
       });
